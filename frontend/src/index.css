@@ -1,0 +1,38 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply font-sans text-ink bg-surface-muted;
+  }
+
+  * {
+    @apply box-border;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-extrabold;
+  }
+}
+
+@layer utilities {
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* cartoon button press: shift down-right + lose shadow */
+  .cartoon-press {
+    @apply active:translate-x-1 active:translate-y-1 active:shadow-none;
+  }
+}
