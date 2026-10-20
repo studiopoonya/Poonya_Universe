@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, Pencil, Trash2, X, Ticket } from 'lucide-react'
 import toast from 'react-hot-toast'
 import api from '@/lib/axios'
+import DatePicker from '@/components/ui/DatePicker'
 
 interface Promo {
   id: number
@@ -91,11 +92,11 @@ function PromoModal({ promo, onClose }: { promo: Promo | null; onClose: () => vo
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelCls}>Mulai</label>
-            <input type="date" value={form.starts_at} onChange={(e) => set('starts_at', e.target.value)} className={inputCls} />
+            <DatePicker value={form.starts_at} onChange={(v) => set('starts_at', v)} clearable placeholder="Langsung" />
           </div>
           <div>
             <label className={labelCls}>Berakhir</label>
-            <input type="date" value={form.ends_at} onChange={(e) => set('ends_at', e.target.value)} className={inputCls} />
+            <DatePicker value={form.ends_at} onChange={(v) => set('ends_at', v)} min={form.starts_at || undefined} clearable placeholder="Tanpa batas" />
           </div>
         </div>
 

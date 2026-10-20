@@ -8,6 +8,7 @@ import { TrendingUp, CalendarCheck, CheckCircle, Clock, Download } from 'lucide-
 import toast from 'react-hot-toast'
 import { AnimatePresence } from 'framer-motion'
 import CollectCashModal from '@/components/admin/CollectCashModal'
+import { MonthPicker } from '@/components/ui/DatePicker'
 import type { Booking } from '@/types'
 import api from '@/lib/axios'
 import { formatIDR, downloadFile } from '@/lib/utils'
@@ -111,11 +112,7 @@ export default function AdminDashboard() {
           <p className="text-sm font-semibold text-gray-400 mt-0.5">Ringkasan {periodSub}</p>
         </div>
         <div className="flex gap-2">
-          <input
-            type="month" value={month} max={THIS_MONTH}
-            onChange={(e) => e.target.value && setMonth(e.target.value)}
-            className="px-3 py-2.5 rounded-2xl border-2 border-ink bg-white text-sm font-extrabold text-ink shadow-cartoon-sm"
-          />
+          <MonthPicker value={month} max={THIS_MONTH} onChange={setMonth} className="w-48" />
           <button
             onClick={exportMonth} disabled={exporting}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-ink bg-amber-400 text-sm font-extrabold text-ink shadow-cartoon-sm disabled:opacity-50"

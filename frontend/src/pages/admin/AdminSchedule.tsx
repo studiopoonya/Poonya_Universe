@@ -6,6 +6,7 @@ import { Clock, CalendarOff, Lock, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import api from '@/lib/axios'
 import type { Studio } from '@/types'
+import DatePicker from '@/components/ui/DatePicker'
 
 interface Hour { weekday: number; is_open: boolean; open_time: string; close_time: string }
 interface ClosedDate { id: number; date: string; reason: string | null }
@@ -99,9 +100,9 @@ function ClosedDatesCard({ dates }: { dates: ClosedDate[] }) {
     <div className={card}>
       <SectionTitle icon={<CalendarOff className="w-5 h-5" strokeWidth={2.5} />} title="Hari Libur" desc="Tanggal tanpa slot sama sekali, misalnya libur nasional atau renovasi." />
       <form onSubmit={(e) => { e.preventDefault(); add.mutate() }} className="flex flex-wrap gap-2 mb-4">
-        <input required type="date" min={format(new Date(), 'yyyy-MM-dd')} value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+        <DatePicker value={date} onChange={setDate} min={format(new Date(), 'yyyy-MM-dd')} placeholder="Pilih tanggal libur" className="w-full sm:w-60" />
         <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Keterangan (opsional)" className={`${inputCls} flex-1 min-w-[160px]`} />
-        <button type="submit" disabled={add.isPending} className={btnPrimary}>Tambah</button>
+        <button type="submit" disabled={add.isPending || !date} className={btnPrimary}>Tambah</button>
       </form>
       {dates.length === 0 ? (
         <p className="text-sm font-bold text-gray-300">Belum ada hari libur ke depan.</p>
@@ -155,12 +156,12 @@ function SlotBlockCard() {
 
   return (
     <div className={card}>
-      <SectionTitle icon={<Lock className="w-5 h-5" strokeWidth={2.5} />} title="Blokir Slot" desc="Klik slot untuk memblokir / membuka. Slot terblokir tidak bisa dibooking customer." />
+      <SectionTitle icon={<Lock className="w-5 h-5" strokeWidth={2.5} />} title="Blokir Slot" desc="Tutup jam tertentu saja tanpa menutup seharian — misalnya sesi privat, istirahat staff, perawatan alat, atau jadwal yang sudah dipesan lewat WhatsApp. Klik slot untuk blokir / buka lagi." />
       <div className="flex flex-wrap gap-2 mb-4">
         <select value={activeStudio ?? ''} onChange={(e) => setStudioId(Number(e.target.value))} className={inputCls}>
           {studios.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+        <DatePicker value={date} onChange={setDate} className="w-full sm:w-60" />
       </div>
       {isLoading ? (
         <div className="h-24 rounded-2xl bg-surface-subtle animate-pulse" />
@@ -182,7 +183,16 @@ function SlotBlockCard() {
             ))}
           </div>
           <div className="flex flex-wrap gap-3 mt-3 text-[11px] font-bold text-gray-400">
-            <span>⬜ Tersedia</span><span className="text-green-600">🟩 Dibooking</span><span className="text-amber-600">🟨 Sedang dibayar</span><span>▦ Diblokir</span>
+            {[
+              ['bg-white border-ink', 'Tersedia — klik untuk blokir'],
+              ['bg-gray-200 border-gray-400', 'Diblokir — klik untuk buka'],
+              ['bg-green-100 border-green-400', 'Dibooking'],
+              ['bg-amber-100 border-amber-400', 'Sedang dibayar'],
+            ].map(([cls, label]) => (
+              <span key={label} className="inline-flex items-center gap-1.5">
+                <span className={`w-3.5 h-3.5 rounded border-2 ${cls}`} />{label}
+              </span>
+            ))}
           </div>
         </>
       )}

@@ -11,6 +11,7 @@ import { formatIDR, downloadFile } from '@/lib/utils'
 import type { Booking } from '@/types'
 import CollectCashModal from '@/components/admin/CollectCashModal'
 import Pagination from '@/components/admin/Pagination'
+import DatePicker from '@/components/ui/DatePicker'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -230,10 +231,10 @@ export default function AdminBookings() {
           {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
 
-        <input
-          type="date" value={dateFilter}
-          onChange={(e) => { setDateFilter(e.target.value); setPage(1) }}
-          className={selectCls}
+        <DatePicker
+          value={dateFilter} clearable placeholder="Tanggal sesi"
+          onChange={(v) => { setDateFilter(v); setPage(1) }}
+          className="w-full sm:w-56"
         />
 
         {hasFilters && (
