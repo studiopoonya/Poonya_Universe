@@ -93,9 +93,10 @@ export default function StudioStep({ onNext, initialValue }: Props) {
       opacity: far ? 0 : g.op[k],
       zIndex: 50 - Math.abs(d) * 10,
       pointerEvents: far || g.op[k] === 0 ? 'none' : 'auto',
+      // Soft shadows only: a hard cartoon offset reads as a second slab on a rotated 3D card
       boxShadow: d === 0
-        ? '0 30px 60px -22px rgba(124,58,237,.55), 6px 6px 0 #1A1A2E'
-        : '4px 4px 0 #1A1A2E',
+        ? '0 22px 44px -18px rgba(124,58,237,.45), 0 8px 20px -12px rgba(26,26,46,.35)'
+        : '0 16px 32px -18px rgba(26,26,46,.4)',
     }
   }
 
