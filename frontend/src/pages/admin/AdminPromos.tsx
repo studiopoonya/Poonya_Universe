@@ -5,6 +5,7 @@ import { Plus, Pencil, Trash2, X, Ticket } from 'lucide-react'
 import toast from 'react-hot-toast'
 import api from '@/lib/axios'
 import DatePicker from '@/components/ui/DatePicker'
+import Select from '@/components/ui/Select'
 
 interface Promo {
   id: number
@@ -58,7 +59,7 @@ function PromoModal({ promo, onClose }: { promo: Promo | null; onClose: () => vo
       <motion.form
         initial={{ opacity: 0, scale: 0.93, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.93, y: 16 }}
         onSubmit={(e) => { e.preventDefault(); save.mutate() }}
-        className="bg-white rounded-3xl border-2 border-ink shadow-cartoon-xl w-full max-w-md max-h-[92vh] overflow-y-auto p-6 space-y-4"
+        className="bg-white rounded-3xl border-2 border-ink shadow-cartoon-xl w-full max-w-xl max-h-[94vh] overflow-y-auto p-6 md:p-8 space-y-5"
       >
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-extrabold text-ink">{promo ? 'Edit Promo' : 'Promo Baru'}</h2>
@@ -73,10 +74,13 @@ function PromoModal({ promo, onClose }: { promo: Promo | null; onClose: () => vo
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelCls}>Jenis</label>
-            <select value={form.type} onChange={(e) => set('type', e.target.value as Form['type'])} className={inputCls}>
-              <option value="percent">Persen (%)</option>
-              <option value="fixed">Potongan (Rp)</option>
-            </select>
+            <Select
+              value={form.type} onChange={(v) => set('type', v)}
+              options={[
+                { value: 'percent' as const, label: 'Persen (%)', hint: 'Misal 20% dari total' },
+                { value: 'fixed' as const, label: 'Potongan (Rp)', hint: 'Misal Rp 15.000' },
+              ]}
+            />
           </div>
           <div>
             <label className={labelCls}>{form.type === 'percent' ? 'Diskon (%)' : 'Potongan (Rp)'}</label>

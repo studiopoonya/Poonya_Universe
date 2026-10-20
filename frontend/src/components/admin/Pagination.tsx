@@ -1,3 +1,5 @@
+import Select from '@/components/ui/Select'
+
 interface Props {
   page: number
   lastPage: number
@@ -55,12 +57,11 @@ export default function Pagination({ page, lastPage, total, from, to, perPage, o
       {onPerPage && (
         <label className="flex items-center gap-2 text-xs font-bold text-gray-400 order-3">
           Per halaman
-          <select
-            value={perPage} onChange={(e) => onPerPage(Number(e.target.value))}
-            className="px-2.5 py-1.5 rounded-xl border-2 border-ink text-xs font-extrabold text-ink bg-white"
-          >
-            {[10, 20, 50].map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>
+          <Select
+            size="sm" className="w-20" ariaLabel="Jumlah per halaman"
+            value={perPage} onChange={onPerPage}
+            options={[10, 20, 50].map((n) => ({ value: n, label: String(n) }))}
+          />
         </label>
       )}
     </div>

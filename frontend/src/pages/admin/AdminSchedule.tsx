@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import api from '@/lib/axios'
 import type { Studio } from '@/types'
 import DatePicker from '@/components/ui/DatePicker'
+import Select from '@/components/ui/Select'
 
 interface Hour { weekday: number; is_open: boolean; open_time: string; close_time: string }
 interface ClosedDate { id: number; date: string; reason: string | null }
@@ -173,9 +174,13 @@ function SlotBlockCard() {
         </p>
       </div>
       <div className="flex flex-wrap gap-2 mb-4">
-        <select value={activeStudio ?? ''} onChange={(e) => setStudioId(Number(e.target.value))} className={inputCls}>
-          {studios.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+        {activeStudio && (
+          <Select
+            value={activeStudio} onChange={setStudioId} ariaLabel="Studio"
+            options={studios.map((s) => ({ value: s.id, label: s.name, dot: s.color }))}
+            className="w-full sm:w-64"
+          />
+        )}
         <DatePicker value={date} onChange={setDate} className="w-full sm:w-60" />
       </div>
       {isLoading ? (

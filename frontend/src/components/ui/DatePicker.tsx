@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   addDays, addMonths, addYears, endOfMonth, endOfWeek, format, isAfter, isBefore, isSameDay,
@@ -10,39 +11,57 @@ import { CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react'
 const WEEKDAYS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']
 const POPOVER_W = 300
 
-/** Open/close + outside-click/Esc handling, and flip to the right edge near the viewport edge. */
-function usePopover() {
+/**
+ * Open/close, outside-click/Esc, and placement. The panel renders in a portal with
+ * fixed positioning so scrolling modals/cards can't clip it; it stays inside the
+ * viewport horizontally and opens upward when there's no room below.
+ */
+function usePopover(width: number, height: number) {
   const [open, setOpen] = useState(false)
-  const [alignRight, setAlignRight] = useState(false)
+  const [style, setStyle] = useState<React.CSSProperties>({})
   const ref = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
 
-  useLayoutEffect(() => {
-    if (!open || !ref.current) return
-    const r = ref.current.getBoundingClientRect()
-    setAlignRight(r.left + POPOVER_W > window.innerWidth - 8)
-  }, [open])
+  const place = () => {
+    const r = ref.current?.getBoundingClientRect()
+    if (!r) return
+    const left  = Math.max(8, Math.min(r.left, window.innerWidth - width - 8))
+    const below = window.innerHeight - r.bottom
+    setStyle(below < height + 12 && r.top > below
+      ? { left, width, bottom: window.innerHeight - r.top + 8 }
+      : { left, width, top: r.bottom + 8 })
+  }
+
+  useLayoutEffect(() => { if (open) place() }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!open) return
-    const onDown = (e: MouseEvent | TouchEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false) }
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as Node
+      if (!ref.current?.contains(t) && !panelRef.current?.contains(t)) setOpen(false)
+    }
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
     document.addEventListener('mousedown', onDown)
     document.addEventListener('touchstart', onDown)
     document.addEventListener('keydown', onKey)
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true) // any scrolling ancestor, e.g. a modal
     return () => {
       document.removeEventListener('mousedown', onDown)
       document.removeEventListener('touchstart', onDown)
       document.removeEventListener('keydown', onKey)
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
     }
-  }, [open])
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { open, setOpen, alignRight, ref }
+  return { open, setOpen, ref, panelRef, style }
 }
 
 const triggerCls =
   'w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl border-2 border-ink bg-white text-sm font-extrabold text-ink shadow-cartoon-sm text-left hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-cartoon transition-all duration-100'
 
-const panelCls = 'absolute z-50 mt-2 bg-white rounded-3xl border-2 border-ink shadow-cartoon-lg p-4'
+const panelCls = 'fixed z-[100] bg-white rounded-3xl border-2 border-ink shadow-cartoon-lg p-4'
 
 const navBtn =
   'w-8 h-8 rounded-xl border-2 border-ink bg-white grid place-items-center shadow-cartoon-sm hover:-translate-y-0.5 transition-all disabled:opacity-25 disabled:shadow-none disabled:translate-y-0'
@@ -61,7 +80,7 @@ interface DatePickerProps {
 
 /** Branded calendar popover replacing the browser's date input. Monday-first, Indonesian. */
 export default function DatePicker({ value, onChange, min, placeholder = 'Pilih tanggal', clearable, className = '' }: DatePickerProps) {
-  const { open, setOpen, alignRight, ref } = usePopover()
+  const { open, setOpen, ref, panelRef, style } = usePopover(POPOVER_W, 400)
   const selected = value ? parseISO(value) : null
   const minDate  = min ? startOfDay(parseISO(min)) : null
   const today    = startOfDay(new Date())
@@ -99,14 +118,14 @@ export default function DatePicker({ value, onChange, min, placeholder = 'Pilih 
         )}
       </button>
 
-      <AnimatePresence>
+      {createPortal(<AnimatePresence>
         {open && (
           <motion.div
-            role="dialog" aria-label="Pilih tanggal"
+            ref={panelRef} role="dialog" aria-label="Pilih tanggal"
             initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }}
             transition={{ duration: 0.15 }}
-            className={`${panelCls} ${alignRight ? 'right-0' : 'left-0'}`}
-            style={{ width: POPOVER_W }}
+            className={panelCls}
+            style={style}
           >
             {/* header: month nav; tap the label to jump months */}
             <div className="flex items-center justify-between mb-3">
@@ -181,7 +200,7 @@ export default function DatePicker({ value, onChange, min, placeholder = 'Pilih 
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>, document.body)}
     </div>
   )
 }
@@ -197,7 +216,7 @@ interface MonthPickerProps {
 
 /** Same look, for choosing a month (dashboard reports). */
 export function MonthPicker({ value, onChange, max, className = '' }: MonthPickerProps) {
-  const { open, setOpen, alignRight, ref } = usePopover()
+  const { open, setOpen, ref, panelRef, style } = usePopover(260, 220)
   const selected = parseISO(`${value}-01`)
   const maxDate  = max ? parseISO(`${max}-01`) : null
   const [year, setYear] = useState(selected.getFullYear())
@@ -210,13 +229,13 @@ export function MonthPicker({ value, onChange, max, className = '' }: MonthPicke
         <CalendarDays className="w-4 h-4 shrink-0 text-brand-500" strokeWidth={2.5} />
         <span className="flex-1 capitalize">{format(selected, 'MMMM yyyy', { locale: idLocale })}</span>
       </button>
-      <AnimatePresence>
+      {createPortal(<AnimatePresence>
         {open && (
           <motion.div
-            role="dialog" aria-label="Pilih bulan"
+            ref={panelRef} role="dialog" aria-label="Pilih bulan"
             initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }}
             transition={{ duration: 0.15 }}
-            className={`${panelCls} ${alignRight ? 'right-0' : 'left-0'}`} style={{ width: 260 }}
+            className={panelCls} style={style}
           >
             <div className="flex items-center justify-between mb-3">
               <button type="button" aria-label="Tahun sebelumnya" className={navBtn} onClick={() => setYear((y) => y - 1)}>
@@ -244,7 +263,7 @@ export function MonthPicker({ value, onChange, max, className = '' }: MonthPicke
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>, document.body)}
     </div>
   )
 }

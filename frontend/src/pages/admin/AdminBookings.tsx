@@ -12,6 +12,7 @@ import type { Booking } from '@/types'
 import CollectCashModal from '@/components/admin/CollectCashModal'
 import Pagination from '@/components/admin/Pagination'
 import DatePicker from '@/components/ui/DatePicker'
+import Select from '@/components/ui/Select'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -227,9 +228,10 @@ export default function AdminBookings() {
           </button>
         </form>
 
-        <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }} className={selectCls}>
-          {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        <Select
+          value={statusFilter} onChange={(v) => { setStatusFilter(v); setPage(1) }}
+          options={STATUS_OPTIONS} className="w-full sm:w-52" ariaLabel="Filter status"
+        />
 
         <DatePicker
           value={dateFilter} clearable placeholder="Tanggal sesi"

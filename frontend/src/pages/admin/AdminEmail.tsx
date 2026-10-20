@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Mail, Send, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import api from '@/lib/axios'
+import Select from '@/components/ui/Select'
 
 interface MailForm {
   mail_host: string
@@ -151,10 +152,13 @@ export default function AdminEmail() {
               </div>
               <div className="col-span-2 sm:col-span-3">
                 <Field label="Keamanan">
-                  <select value={form.mail_encryption} onChange={(e) => set('mail_encryption', e.target.value)} className={inputCls}>
-                    <option value="tls">TLS (port 587)</option>
-                    <option value="ssl">SSL (port 465)</option>
-                  </select>
+                  <Select
+                    value={form.mail_encryption} onChange={(v) => set('mail_encryption', v)}
+                    options={[
+                      { value: 'tls', label: 'TLS', hint: 'Port 587 — Gmail, Outlook' },
+                      { value: 'ssl', label: 'SSL', hint: 'Port 465 — Zoho, dll.' },
+                    ]}
+                  />
                 </Field>
               </div>
             </div>
