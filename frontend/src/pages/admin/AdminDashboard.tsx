@@ -6,6 +6,9 @@ import { format, parseISO } from 'date-fns'
 import { id as idLocale } from 'date-fns/locale'
 import { TrendingUp, CalendarCheck, CheckCircle, Clock, Download } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { AnimatePresence } from 'framer-motion'
+import CollectCashModal from '@/components/admin/CollectCashModal'
+import type { Booking } from '@/types'
 import api from '@/lib/axios'
 import { formatIDR, downloadFile } from '@/lib/utils'
 
@@ -56,6 +59,7 @@ function StatCard({ label, value, sub, icon, accent }: StatCardProps) {
 export default function AdminDashboard() {
   const [month, setMonth]         = useState(THIS_MONTH)
   const [exporting, setExporting] = useState(false)
+  const [collecting, setCollecting] = useState<Booking | null>(null)
   const isThisMonth = month === THIS_MONTH
 
   const { data, isLoading } = useQuery({
@@ -95,6 +99,7 @@ export default function AdminDashboard() {
   const recentBookings: any[]     = data?.recent_bookings ?? []
   const revenueByDay: RevenueDay[] = data?.revenue_by_day ?? []
   const revenueByStudio: RevenueStudio[] = data?.revenue_by_studio ?? []
+  const onsiteBookings: Booking[] = data?.onsite_bookings ?? []
   const monthLabel = format(parseISO(`${month}-01`), 'MMMM yyyy', { locale: idLocale })
   const periodSub  = isThisMonth ? 'bulan ini' : monthLabel
 
@@ -206,6 +211,42 @@ export default function AdminDashboard() {
         )}
       </div>
 
+      {/* Pay-at-studio reservations waiting for cash */}
+      <div className="bg-white rounded-3xl border-2 border-ink shadow-cartoon overflow-hidden">
+        <div className="px-5 md:px-6 py-4 border-b-2 border-ink flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-extrabold text-ink">💵 Menunggu Pembayaran di Studio</p>
+            <p className="text-xs font-semibold text-gray-400">Reservasi bayar di tempat — jadwal belum terkunci sampai dibayar.</p>
+          </div>
+          <span className="shrink-0 text-xs font-extrabold px-2.5 py-1 rounded-full bg-sky-100 text-sky-700 border-2 border-ink">{onsiteBookings.length}</span>
+        </div>
+        {onsiteBookings.length === 0 ? (
+          <p className="px-6 py-8 text-center text-sm font-bold text-gray-300">Tidak ada reservasi bayar di tempat.</p>
+        ) : (
+          <div className="divide-y-2 divide-surface-subtle">
+            {onsiteBookings.map((b) => (
+              <div key={b.id} className="px-5 md:px-6 py-3.5 flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-2">
+                <div className="w-28 shrink-0">
+                  <p className="text-xs font-extrabold text-ink">{format(parseISO(b.slot.date), 'EEE, d MMM', { locale: idLocale })}</p>
+                  <p className="text-xs font-bold text-gray-400">{b.slot.start_time.slice(0, 5)} – {b.end_time}</p>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-extrabold text-ink truncate">{b.customer_name}</p>
+                  <p className="text-xs font-bold text-gray-400 truncate">{(b as any).studio?.name} · {b.customer_phone}</p>
+                </div>
+                <p className="text-sm font-extrabold text-ink shrink-0">{formatIDR(b.payment?.amount ?? 0)}</p>
+                <button
+                  onClick={() => setCollecting(b)}
+                  className="w-full sm:w-auto shrink-0 px-4 py-2 rounded-xl bg-green-500 text-white text-xs font-extrabold border-2 border-ink shadow-cartoon-sm"
+                >
+                  Terima Pembayaran
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Revenue per studio */}
       {revenueByStudio.length > 0 && (
         <div className="bg-white rounded-3xl border-2 border-ink shadow-cartoon p-6">
@@ -292,6 +333,9 @@ export default function AdminDashboard() {
           </table>
         </div>
       </div>
+      <AnimatePresence>
+        {collecting && <CollectCashModal booking={collecting} onClose={() => setCollecting(null)} />}
+      </AnimatePresence>
     </div>
   )
 }

@@ -61,7 +61,15 @@ class OnsitePaymentTest extends TestCase
         $slots = collect(['10:00', '10:30'])->map(fn ($t) => $this->slot($studio, $day, $t));
         $b = $this->reserve($slots[0], ['sessions' => 2]);
 
-        $this->asUser($this->staff(['bookings']))->patchJson("/api/admin/bookings/{$b->id}/confirm")->assertOk();
+        $staff = $this->staff(['bookings']);
+        $this->asUser($staff)->patchJson("/api/admin/bookings/{$b->id}/confirm")
+            ->assertStatus(422)->assertJsonValidationErrors('cash_received');
+        $this->asUser($staff)->patchJson("/api/admin/bookings/{$b->id}/confirm", ['cash_received' => 50000])
+            ->assertStatus(422); // less than the Rp 100.000 bill
+        $this->asUser($staff)->patchJson("/api/admin/bookings/{$b->id}/confirm", ['cash_received' => 150000])->assertOk();
+
+        $this->assertSame(150000, $b->payment->fresh()->cash_received);
+        $this->assertSame(50000, $b->payment->fresh()->cash_change);
 
         $this->assertSame('confirmed', $b->fresh()->status);
         $this->assertSame('paid', $b->payment->fresh()->status);
@@ -75,7 +83,7 @@ class OnsitePaymentTest extends TestCase
         $onsite->update(['status' => 'onsite']); // pretend it survived (e.g. admin looks at a stale list)
         Slot::whereKey($slot->id)->update(['status' => 'booked']);
 
-        $this->asUser($this->admin())->patchJson("/api/admin/bookings/{$onsite->id}/confirm")->assertStatus(409);
+        $this->asUser($this->admin())->patchJson("/api/admin/bookings/{$onsite->id}/confirm", ['cash_received' => 50000])->assertStatus(409);
         $this->assertSame('onsite', $onsite->fresh()->status);
     }
 
@@ -123,5 +131,30 @@ class OnsitePaymentTest extends TestCase
 
         $this->assertSame('onsite', $b->fresh()->status);
         $this->assertSame('available', $slot->fresh()->status);
+    }
+
+    public function test_dashboard_lists_reservations_to_collect_soonest_first(): void
+    {
+        $studio = $this->studio();
+        $later = $this->reserve($this->slot($studio, $this->weekday(20), '15:00'), ['customer_name' => 'Nanti']);
+        $soon  = $this->reserve($this->slot($studio, $this->weekday(5), '10:00'), ['customer_name' => 'Duluan']);
+        $this->book($this->slot($studio, $this->weekday(5), "12:00")); // online booking: not in the list
+
+        $list = $this->asUser($this->admin())->getJson('/api/admin/dashboard')->assertOk()->json('onsite_bookings');
+
+        $this->assertSame(['Duluan', 'Nanti'], array_column($list, 'customer_name'));
+        $this->assertSame(50000, $list[0]['payment']['amount']);
+    }
+
+    public function test_walk_in_cash_records_change(): void
+    {
+        $slot = $this->slot($this->studio(['price' => 70000]));
+
+        $this->asUser($this->staff(['payment']))
+            ->postJson('/api/admin/bookings', $this->bookingPayload($slot, ['payment_method' => 'cash', 'cash_received' => 100000]))
+            ->assertCreated();
+
+        $p = Booking::first()->payment;
+        $this->assertSame([100000, 30000], [$p->cash_received, $p->cash_change]);
     }
 }

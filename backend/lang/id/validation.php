@@ -86,5 +86,7 @@ return [
         'ends_at'           => 'Tanggal berakhir',
         'reason'            => 'Keterangan',
         'hours'             => 'Jam operasional',
+        'cash_received'     => 'Uang diterima',
+        'sessions'          => 'Durasi',
     ],
 ];

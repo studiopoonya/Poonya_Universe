@@ -9,6 +9,7 @@ import toast from 'react-hot-toast'
 import api from '@/lib/axios'
 import { formatIDR, downloadFile } from '@/lib/utils'
 import type { Booking } from '@/types'
+import CollectCashModal from '@/components/admin/CollectCashModal'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -304,6 +305,11 @@ export default function AdminBookings() {
                   {b.payment?.status === 'refunded' && (
                     <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full border-2 bg-gray-50 text-gray-400 border-gray-200">Sudah refund</span>
                   )}
+                  {b.payment?.cash_received != null && (
+                    <span className="text-[10px] font-bold text-gray-500 text-right">
+                      💵 Tunai {formatIDR(b.payment.cash_received)} · Kembali {formatIDR(b.payment.cash_change ?? 0)}
+                    </span>
+                  )}
                 </div>
 
                 {/* actions */}
@@ -362,9 +368,12 @@ export default function AdminBookings() {
         </div>
       )}
 
-      {/* action modal */}
+      {/* action modal — an onsite customer paying cash gets the change calculator */}
       <AnimatePresence>
-        {actionTarget && (
+        {actionTarget?.action === 'confirm' && actionTarget.booking.status === 'onsite' && (
+          <CollectCashModal key="cash-modal" booking={actionTarget.booking} onClose={() => setActionTarget(null)} />
+        )}
+        {actionTarget && !(actionTarget.action === 'confirm' && actionTarget.booking.status === 'onsite') && (
           <ActionModal
             key="action-modal"
             action={actionTarget.action}

@@ -66,7 +66,7 @@ export interface Booking {
   /** End of the last session (HH:MM) */
   end_time?: string | null
   sessions?: number
-  payment?: { amount: number; status: string; method?: string }
+  payment?: { amount: number; status: string; method?: string; gateway?: string; cash_received?: number | null; cash_change?: number | null }
 }
 
 export interface DashboardStats {

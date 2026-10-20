@@ -31,6 +31,14 @@ class DashboardController extends Controller
             ->whereHas('slot', fn ($q) => $q->where('date', today()->toDateString()))
             ->count();
 
+        // Pay-at-studio reservations still to collect, soonest first
+        $onsite = Booking::with(['studio', 'slot', 'payment'])
+            ->where('bookings.status', 'onsite') // slots has a status column too
+            ->join('slots', 'slots.id', '=', 'bookings.slot_id')
+            ->orderBy('slots.date')->orderBy('slots.start_time')
+            ->limit(20)
+            ->get(['bookings.*']);
+
         $recentBookings = Booking::with(['studio', 'slot', 'payment'])
             ->latest()
             ->limit(10)
@@ -61,6 +69,7 @@ class DashboardController extends Controller
                 'pending_refunds'    => Payment::where('status', 'refund_pending')->count(),
             ],
             'recent_bookings'   => $recentBookings,
+            'onsite_bookings'   => $onsite,
             'revenue_by_day'    => $revenueByDay,
             'revenue_by_studio' => $revenueByStudio,
         ]);

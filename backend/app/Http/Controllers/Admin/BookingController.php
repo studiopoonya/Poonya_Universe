@@ -101,6 +101,7 @@ class BookingController extends Controller
             'payment_method' => ['required', 'in:cash,qris'],
             'promo_code'     => ['nullable', 'string', 'max:32'],
             'sessions'       => ['nullable', 'integer', 'between:1,' . Booking::MAX_SESSIONS],
+            'cash_received'  => ['nullable', 'integer', 'min:0'],
         ], [
             'customer_phone.regex' => 'Nomor HP tidak valid. Gunakan 8–15 angka, contoh 081234567890.',
         ]);
@@ -150,10 +151,17 @@ class BookingController extends Controller
 
             // Cash: immediately confirm
             if ($data['payment_method'] === 'cash') {
-                DB::transaction(function () use ($booking) {
+                $cash = $data['cash_received'] ?? null;
+                abort_if($cash !== null && $cash < $booking->payment->amount, 422, 'Uang yang diterima kurang dari tagihan.');
+
+                DB::transaction(function () use ($booking, $cash) {
                     $booking->update(['status' => 'confirmed', 'confirmed_at' => now()]);
                     $booking->bookSlots();
-                    $booking->payment()->update(['status' => 'paid', 'paid_at' => now(), 'method' => 'cash']);
+                    $booking->payment()->update([
+                        'status' => 'paid', 'paid_at' => now(), 'method' => 'cash',
+                        'cash_received' => $cash,
+                        'cash_change'   => $cash !== null ? $cash - $booking->payment->amount : null,
+                    ]);
                     $booking->sendConfirmation();
                 });
 
@@ -236,12 +244,19 @@ class BookingController extends Controller
      * Manually confirm a booking: a pending one (e.g. paid outside Midtrans), or a
      * pay-at-studio reservation when the customer arrives and pays cash.
      */
-    public function confirm(Booking $booking): JsonResponse
+    public function confirm(Request $request, Booking $booking): JsonResponse
     {
         abort_if(! in_array($booking->status, ['pending', 'onsite']), 422, 'Hanya booking menunggu / bayar di tempat yang bisa dikonfirmasi.');
 
+        // Cash at the counter: record what was handed over so the change is on file
+        $isCash = $booking->payment?->gateway === 'cash';
+        $data = $request->validate([
+            'cash_received' => [$booking->status === 'onsite' && $booking->payment?->amount > 0 ? 'required' : 'nullable', 'integer', 'min:' . (int) $booking->payment?->amount],
+        ], ['cash_received.min' => 'Uang yang diterima kurang dari tagihan.', 'cash_received.required' => 'Masukkan jumlah uang yang diterima.']);
+        $cash = $isCash ? ($data['cash_received'] ?? null) : null;
+
         try {
-            DB::transaction(function () use ($booking) {
+            DB::transaction(function () use ($booking, $cash) {
                 if ($booking->status === 'onsite') {
                     // Its slots were never locked: take them now, unless someone paid online first
                     SlotBooker::take($booking->studio_id, $booking->slot_id, $booking->sessions, 'booked', allowStarted: true, exceptBookingId: $booking->id);
@@ -250,7 +265,13 @@ class BookingController extends Controller
                 }
 
                 $booking->update(['status' => 'confirmed', 'confirmed_at' => now()]);
-                $booking->payment()->update(['status' => 'paid', 'paid_at' => now(), 'method' => $booking->payment->gateway === 'cash' ? 'cash' : $booking->payment->method]);
+                $booking->payment()->update([
+                    'status'        => 'paid',
+                    'paid_at'       => now(),
+                    'method'        => $booking->payment->gateway === 'cash' ? 'cash' : $booking->payment->method,
+                    'cash_received' => $cash,
+                    'cash_change'   => $cash !== null ? $cash - $booking->payment->amount : null,
+                ]);
                 $booking->sendConfirmation();
             });
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {

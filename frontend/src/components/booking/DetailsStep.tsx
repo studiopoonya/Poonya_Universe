@@ -105,16 +105,6 @@ export default function DetailsStep({ onNext, onBack, initialValues }: Props) {
           {errors.customer_phone && <p className="text-red-500 text-xs mt-1">{errors.customer_phone}</p>}
         </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 mb-1.5">Catatan (opsional)</label>
-          <textarea
-            rows={3}
-            placeholder="Preferensi outfit, tema, dsb."
-            value={form.notes}
-            onChange={update('notes') as any}
-            className="w-full px-4 py-3 rounded-xl bg-surface-subtle border border-transparent text-base md:text-sm font-medium text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-brand-500 focus:bg-white transition-all resize-none"
-          />
-        </div>
       </div>
 
       <StepActions>
