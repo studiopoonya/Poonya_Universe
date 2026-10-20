@@ -15,6 +15,7 @@ interface Account {
   email: string
   role: 'admin' | 'staff'
   permissions: string[] | null
+  two_factor_enabled?: boolean
   created_at: string
 }
 
@@ -315,6 +316,13 @@ export default function AdminAccounts() {
   const [deleteTarget, setDeleteTarget] = useState<Account | null>(null)
   const [showModal,    setShowModal]    = useState(false)
 
+  const qc = useQueryClient()
+  const resetTwoFactor = useMutation({
+    mutationFn: (acc: Account) => api.patch(`/admin/accounts/${acc.id}/reset-two-factor`),
+    onSuccess: (res) => { qc.invalidateQueries({ queryKey: ['admin', 'accounts'] }); toast.success(res.data.message) },
+    onError: (err: any) => toast.error(err.response?.data?.message ?? 'Gagal mereset.'),
+  })
+
   const { data: accounts = [], isLoading } = useQuery<Account[]>({
     queryKey: ['admin', 'accounts'],
     queryFn: () => api.get('/admin/accounts').then(r => r.data),
@@ -378,6 +386,9 @@ export default function AdminAccounts() {
                       {acc.role === 'admin' ? <ShieldCheck className="w-2.5 h-2.5" strokeWidth={3} /> : <User className="w-2.5 h-2.5" strokeWidth={3} />}
                       {acc.role === 'admin' ? 'Admin' : 'Staff'}
                     </span>
+                    {acc.two_factor_enabled && (
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-green-50 text-green-600 border-2 border-green-300">2FA</span>
+                    )}
                   </div>
                   <p className="text-xs font-semibold text-gray-400 truncate mb-2">{acc.email}</p>
 
@@ -411,6 +422,15 @@ export default function AdminAccounts() {
 
                 {/* actions */}
                 <div className="flex gap-2 shrink-0">
+                  {acc.two_factor_enabled && acc.id !== currentUserId && (
+                    <button
+                      onClick={() => { if (confirm(`Reset verifikasi 2 langkah ${acc.name}? Dia akan logout dan bisa login hanya dengan password.`)) resetTwoFactor.mutate(acc) }}
+                      title="Reset 2FA (HP hilang)"
+                      className="h-9 px-2.5 rounded-xl border-2 border-ink bg-white shadow-cartoon-sm text-[10px] font-extrabold text-gray-500"
+                    >
+                      Reset 2FA
+                    </button>
+                  )}
                   <button
                     onClick={() => openEdit(acc)}
                     className="w-9 h-9 rounded-xl border-2 border-ink bg-white shadow-cartoon-sm hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-cartoon active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all duration-100 flex items-center justify-center"

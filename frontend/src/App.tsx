@@ -17,6 +17,7 @@ import AdminAccounts  from '@/pages/admin/AdminAccounts'
 import AdminEmail     from '@/pages/admin/AdminEmail'
 import AdminPromos    from '@/pages/admin/AdminPromos'
 import AdminSchedule  from '@/pages/admin/AdminSchedule'
+import AdminSecurity  from '@/pages/admin/AdminSecurity'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -67,6 +68,7 @@ export default function App() {
             <Route path="email"         element={<AdminEmail />} />
             <Route path="promos"        element={<AdminPromos />} />
             <Route path="schedule"      element={<AdminSchedule />} />
+            <Route path="security"      element={<AdminSecurity />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -20,7 +20,7 @@ class AccountController extends Controller
             User::whereIn('role', ['admin', 'staff'])
                 ->orderByRaw("role = 'admin' DESC")
                 ->orderBy('name')
-                ->get(['id', 'name', 'email', 'role', 'permissions', 'created_at'])
+                ->get(['id', 'name', 'email', 'role', 'permissions', 'two_factor_confirmed_at', 'created_at'])
         );
     }
 
@@ -70,6 +70,17 @@ class AccountController extends Controller
 
         $user->update($data);
         return response()->json($user->fresh());
+    }
+
+    /** For a staff member who lost their phone: turn their 2FA off so they can log in and set it up again. */
+    public function resetTwoFactor(Request $request, User $user): JsonResponse
+    {
+        $this->requireAdmin($request);
+
+        $user->forceFill(['two_factor_secret' => null, 'two_factor_recovery_codes' => null, 'two_factor_confirmed_at' => null])->save();
+        $user->tokens()->delete(); // sign them out everywhere
+
+        return response()->json(['message' => "Verifikasi 2 langkah {$user->name} direset."]);
     }
 
     public function destroy(Request $request, User $user): JsonResponse

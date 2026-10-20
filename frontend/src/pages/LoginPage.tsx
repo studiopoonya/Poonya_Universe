@@ -11,24 +11,44 @@ export default function LoginPage() {
   const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
   const [loading,  setLoading]  = useState(false)
+  // Set when the account has 2FA: the password was right, now ask for the authenticator code
+  const [challenge, setChallenge] = useState<string | null>(null)
+  const [code,      setCode]      = useState('')
+
+  const finish = (token: string, user: any) => {
+    if (user.role !== 'admin' && user.role !== 'staff') {
+      toast.error('Akses ditolak. Hanya admin/staff yang bisa masuk.')
+      return
+    }
+    localStorage.setItem('token', token)
+    localStorage.setItem('user', JSON.stringify(user))
+    navigate('/admin', { replace: true })
+  }
+
+  const showError = (err: any, fallback: string) =>
+    toast.error(err.response?.status === 429
+      ? 'Terlalu banyak percobaan login. Tunggu 1 menit lalu coba lagi.'
+      : err.response?.data?.message ?? fallback)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     try {
-      const res = await api.post('/auth/login', { email, password })
-      const { token, user } = res.data
-      if (user.role !== 'admin' && user.role !== 'staff') {
-        toast.error('Akses ditolak. Hanya admin/staff yang bisa masuk.')
+      if (challenge) {
+        const res = await api.post('/auth/two-factor', { challenge, code })
+        finish(res.data.token, res.data.user)
         return
       }
-      localStorage.setItem('token', token)
-      localStorage.setItem('user', JSON.stringify(user))
-      navigate('/admin', { replace: true })
+      const res = await api.post('/auth/login', { email, password })
+      if (res.data.two_factor) {
+        setChallenge(res.data.challenge)
+        return
+      }
+      finish(res.data.token, res.data.user)
     } catch (err: any) {
-      toast.error(err.response?.status === 429
-        ? 'Terlalu banyak percobaan login. Tunggu 1 menit lalu coba lagi.'
-        : err.response?.data?.message ?? 'Login gagal. Periksa email dan password.')
+      // Challenge expired → back to the password step
+      if (challenge && /kedaluwarsa/i.test(err.response?.data?.message ?? '')) { setChallenge(null); setCode('') }
+      showError(err, challenge ? 'Kode salah.' : 'Login gagal. Periksa email dan password.')
     } finally {
       setLoading(false)
     }
@@ -60,6 +80,27 @@ export default function LoginPage() {
 
         <div className="bg-white rounded-3xl border-2 border-ink shadow-cartoon-xl p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
+            {challenge ? (
+              <div>
+                <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1.5">
+                  Kode Verifikasi
+                </label>
+                <input
+                  required autoFocus
+                  inputMode="numeric" autoComplete="one-time-code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="123456"
+                  className="w-full px-4 py-3 rounded-2xl border-2 border-ink text-lg tracking-[0.3em] text-center font-extrabold text-ink placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 shadow-cartoon-sm"
+                />
+                <p className="text-xs font-semibold text-gray-400 mt-2">
+                  Masukkan 6 angka dari aplikasi authenticator, atau salah satu kode pemulihan.
+                </p>
+                <button type="button" onClick={() => { setChallenge(null); setCode('') }} className="text-xs font-bold text-brand-500 mt-2">
+                  ← Kembali
+                </button>
+              </div>
+            ) : (<>
             <div>
               <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1.5">
                 Email
@@ -69,7 +110,7 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@selfstudio.id"
+                placeholder="admin@poonya.studio"
                 className="w-full px-4 py-3 rounded-2xl border-2 border-ink text-sm font-semibold text-ink placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 shadow-cartoon-sm transition-all"
               />
             </div>
@@ -86,9 +127,10 @@ export default function LoginPage() {
                 className="w-full px-4 py-3 rounded-2xl border-2 border-ink text-sm font-semibold text-ink placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 shadow-cartoon-sm transition-all"
               />
             </div>
+            </>)}
             <div className="pt-2">
               <PrimaryButton type="submit" loading={loading}>
-                Masuk 🚀
+                {challenge ? 'Verifikasi' : 'Masuk 🚀'}
               </PrimaryButton>
             </div>
           </form>

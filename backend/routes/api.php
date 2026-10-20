@@ -32,6 +32,7 @@ Route::post('bookings/reschedule', [ManageBookingController::class, 'reschedule'
 
 // Auth (admin/staff only — accounts are created from the Accounts page, no public sign-up)
 Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:login');
+Route::post('auth/two-factor', [AuthController::class, 'twoFactorLogin'])->middleware('throttle:login');
 
 // Guest booking — throttled so nobody can script-lock every slot
 Route::post('bookings', [BookingController::class, 'store'])->middleware('throttle:bookings');
@@ -40,6 +41,10 @@ Route::post('bookings', [BookingController::class, 'store'])->middleware('thrott
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('auth/logout', [AuthController::class, 'logout']);
     Route::get('auth/me',      [AuthController::class, 'me']);
+
+    Route::post('auth/two-factor/setup',   [AuthController::class, 'twoFactorSetup']);
+    Route::post('auth/two-factor/confirm', [AuthController::class, 'twoFactorConfirm'])->middleware('throttle:10,1');
+    Route::delete('auth/two-factor',       [AuthController::class, 'twoFactorDisable'])->middleware('throttle:10,1');
 });
 
 // ── Admin (staff + admin) ────────────────────────────────────────────
@@ -93,6 +98,7 @@ Route::middleware(['auth:sanctum', 'admin.only'])
         Route::post('mail-settings/test', [Admin\MailSettingController::class, 'test'])->middleware('throttle:6,1');
 
         // Controller type-hints `User $user`, so bind {user} — with the default {account} it got an empty model
+        Route::patch('accounts/{user}/reset-two-factor', [Admin\AccountController::class, 'resetTwoFactor']);
         Route::apiResource('accounts', Admin\AccountController::class)->except(['show'])->parameters(['accounts' => 'user']);
     });
 

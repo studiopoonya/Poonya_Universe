@@ -15,7 +15,9 @@ class User extends Authenticatable
 
     protected $fillable = ['name', 'email', 'password', 'role', 'phone', 'permissions'];
 
-    protected $hidden = ['password', 'remember_token'];
+    protected $hidden = ['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'];
+
+    protected $appends = ['two_factor_enabled'];
 
     protected function casts(): array
     {
@@ -23,7 +25,15 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password'          => 'hashed',
             'permissions'       => 'array',
+            'two_factor_secret'         => 'encrypted',
+            'two_factor_recovery_codes' => 'encrypted:array',
+            'two_factor_confirmed_at'   => 'datetime',
         ];
+    }
+
+    public function getTwoFactorEnabledAttribute(): bool
+    {
+        return $this->two_factor_confirmed_at !== null;
     }
 
     public function isAdmin(): bool

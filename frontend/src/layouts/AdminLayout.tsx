@@ -15,6 +15,7 @@ import {
   ShieldOff,
   Ticket,
   CalendarClock,
+  KeyRound,
 } from 'lucide-react'
 import api from '@/lib/axios'
 import toast from 'react-hot-toast'
@@ -147,7 +148,17 @@ export default function AdminLayout() {
         </nav>
 
         {/* Logout */}
-        <div className="px-3 py-4 border-t-3 border-ink">
+        <div className="px-3 py-4 border-t-3 border-ink space-y-1">
+          <NavLink
+            to="/admin/security"
+            className={({ isActive }) =>
+              `w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-extrabold border-2 transition-all duration-100
+               ${isActive ? 'bg-brand-500 text-white border-ink shadow-cartoon-sm' : 'text-gray-400 border-transparent hover:bg-surface-subtle hover:text-ink'}`
+            }
+          >
+            <KeyRound className="w-[18px] h-[18px] shrink-0" strokeWidth={2.5} />
+            Keamanan Akun
+          </NavLink>
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-extrabold text-gray-400 border-2 border-transparent hover:bg-rose-50 hover:text-rose-500 hover:border-rose-300 hover:shadow-[3px_3px_0_#fca5a5] transition-all duration-100"
