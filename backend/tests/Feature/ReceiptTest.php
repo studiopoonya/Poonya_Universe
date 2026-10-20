@@ -18,7 +18,8 @@ class ReceiptTest extends TestCase
         $this->notifyMidtrans($b->order_id, 'settlement');
         $res = $this->postJson('/api/bookings/receipt', $creds)->assertOk()->assertHeader('Content-Type', 'application/pdf');
         $this->assertStringStartsWith('%PDF', $res->getContent());
-        $this->assertStringContainsString("Struk-{$b->order_id}.pdf", $res->headers->get('Content-Disposition'));
+        $name = 'Struk_' . $b->slot->date . '_1000_Budi_Studio-Tes.pdf';
+        $this->assertStringContainsString("filename=\"{$name}\"", $res->headers->get('Content-Disposition'));
     }
 
     public function test_wrong_email_gets_nothing(): void
