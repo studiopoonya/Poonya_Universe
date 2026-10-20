@@ -93,6 +93,10 @@ Route::middleware(['auth:sanctum', 'admin'])
 Route::middleware(['auth:sanctum', 'admin.only'])
     ->prefix('admin')
     ->group(function () {
+        // "Tes Pembayaran" in Settings: a tiny real charge through the active gateway
+        Route::post('payment-test',          [Admin\PaymentTestController::class, 'store'])->middleware('throttle:10,1');
+        Route::get('payment-test/{orderId}', [Admin\PaymentTestController::class, 'show']);
+
         Route::get('mail-settings',       [Admin\MailSettingController::class, 'index']);
         Route::put('mail-settings',       [Admin\MailSettingController::class, 'update']);
         Route::post('mail-settings/test', [Admin\MailSettingController::class, 'test'])->middleware('throttle:6,1');

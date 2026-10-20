@@ -3,7 +3,8 @@
 namespace App\Http\Controllers\Webhook;
 
 use App\Http\Controllers\Controller;
-use App\Models\{Booking, Payment};
+use App\Models\{Booking, Payment, PaymentTest};
+use App\Services\PaymentGatewayService;
 use Illuminate\Http\{JsonResponse, Request};
 use Illuminate\Support\Facades\{DB, Log};
 
@@ -31,7 +32,7 @@ class PaymentWebhookController extends Controller
             orderId:    $payload['order_id'],
             gatewayRef: $payload['transaction_id'],
             method:     $payload['payment_type'],
-            outcome:    $this->resolveOutcome($status, $payload['fraud_status'] ?? null),
+            outcome:    PaymentGatewayService::midtransOutcome($status, $payload['fraud_status'] ?? null),
             failStatus: $status === 'expire' ? 'expired' : 'cancelled',
             rawPayload: $payload,
         );
@@ -58,11 +59,7 @@ class PaymentWebhookController extends Controller
             orderId:    (string) ($payload['external_id'] ?? ''),
             gatewayRef: (string) ($payload['id'] ?? ''),
             method:     strtolower((string) ($payload['payment_method'] ?? $payload['payment_channel'] ?? 'xendit')),
-            outcome:    match ($status) {
-                'PAID', 'SETTLED' => 'paid',
-                'EXPIRED'         => 'failed',
-                default           => 'pending',
-            },
+            outcome:    PaymentGatewayService::xenditOutcome($status),
             failStatus: 'expired',
             rawPayload: $payload,
         );
@@ -82,6 +79,12 @@ class PaymentWebhookController extends Controller
         string $failStatus,
         array  $rawPayload,
     ): void {
+        // Admin "Tes Pembayaran" charges aren't bookings
+        if (str_starts_with($orderId, PaymentTest::PREFIX)) {
+            PaymentTest::where('order_id', $orderId)->first()?->record($outcome, $method, $rawPayload);
+            return;
+        }
+
         DB::transaction(function () use ($orderId, $gatewayRef, $method, $outcome, $failStatus, $rawPayload) {
 
             $booking = Booking::where('order_id', $orderId)
@@ -141,21 +144,4 @@ class PaymentWebhookController extends Controller
         });
     }
 
-    /**
-     * Map a Midtrans transaction_status to 'paid', 'failed' or 'pending'.
-     * https://docs.midtrans.com/docs/https-notification-webhooks#status-definition
-     */
-    private function resolveOutcome(string $status, ?string $fraud): string
-    {
-        return match (strtolower($status)) {
-            'settlement'                        => 'paid',
-            'capture'                           => match ($fraud) {
-                'deny'      => 'failed',
-                'challenge' => 'pending', // needs manual review in the Midtrans dashboard
-                default     => 'paid',
-            },
-            'deny', 'cancel', 'expire', 'failure' => 'failed',
-            default                             => 'pending', // pending, authorize, refunds, unknown
-        };
-    }
 }

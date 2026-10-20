@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Settings2, Copy, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import api from '@/lib/axios'
+import PaymentTestCard from '@/components/admin/PaymentTestCard'
 
 type Gateway = 'midtrans' | 'xendit'
 
@@ -209,6 +210,8 @@ export default function AdminSettings() {
             <Settings2 className="w-4 h-4" strokeWidth={2.5} />
             {save.isPending ? 'Menyimpan…' : 'Simpan Pengaturan'}
           </button>
+
+          <PaymentTestCard gatewayLabel={saved.payment_gateway === 'xendit' ? 'Xendit' : 'Midtrans'} />
         </>
       )}
     </div>

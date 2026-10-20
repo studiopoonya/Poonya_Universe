@@ -26,12 +26,22 @@ abstract class TestCase extends BaseTestCase
 
     protected bool $gatewayUp = true;
 
-    /** One fake for the whole test; flip $gatewayUp to simulate an outage (later fakes don't override). */
+    /** What a gateway status lookup (GET) returns; null = transaction not started yet (404). */
+    protected ?array $gatewayStatus = null;
+
+    /** One fake for the whole test; flip $gatewayUp / $gatewayStatus to change it (later fakes don't override). */
     protected function midtransUp(): void
     {
-        Http::fake(fn () => $this->gatewayUp
-            ? Http::response(['token' => 'snap-token', 'invoice_url' => 'https://checkout-staging.xendit.co/web/inv-123'], 201)
-            : Http::response(['error_messages' => ['Unauthorized']], 401));
+        Http::fake(function (\Illuminate\Http\Client\Request $r) {
+            if (! $this->gatewayUp) return Http::response(['error_messages' => ['Unauthorized']], 401);
+            if ($r->method() === 'GET') {
+                return $this->gatewayStatus === null
+                    ? Http::response(['status_code' => '404', 'status_message' => "Transaction doesn't exist."], 404)
+                    : Http::response($this->gatewayStatus, 200);
+            }
+
+            return Http::response(['token' => 'snap-token', 'invoice_url' => 'https://checkout-staging.xendit.co/web/inv-123'], 201);
+        });
     }
 
     protected function midtransDown(): void
