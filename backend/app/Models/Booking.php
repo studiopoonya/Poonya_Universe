@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\{DB, Notification};
 class Booking extends Model
 {
     protected $fillable = [
-        'user_id', 'studio_id', 'slot_id', 'promo_code_id', 'discount_amount', 'order_id', 'status',
+        'user_id', 'studio_id', 'slot_id', 'promo_code_id', 'discount_amount', 'reschedule_count', 'order_id', 'status',
         'customer_name', 'customer_email', 'customer_phone',
         'notes', 'expires_at', 'confirmed_at',
     ];
@@ -86,9 +86,25 @@ class Booking extends Model
     }
 
     /** Email the confirmation to the address entered at checkout (most customers are guests). */
-    public function sendConfirmation(): void
+    public function sendConfirmation(bool $rescheduled = false): void
     {
-        Notification::route('mail', $this->customer_email)->notify(new BookingConfirmed($this));
+        Notification::route('mail', $this->customer_email)->notify(new BookingConfirmed($this, $rescheduled));
+    }
+
+    public const RESCHEDULE_MIN_HOURS = 24;
+    public const RESCHEDULE_MAX       = 1;
+
+    /** Why this booking can't be moved right now, or null when it can. */
+    public function rescheduleBlockedReason(): ?string
+    {
+        $start = \Carbon\Carbon::parse($this->slot->date . ' ' . $this->slot->start_time);
+
+        return match (true) {
+            $this->status !== 'confirmed'                  => 'Hanya booking yang sudah dikonfirmasi yang bisa diubah jadwalnya.',
+            $this->reschedule_count >= self::RESCHEDULE_MAX => 'Jadwal booking ini sudah pernah diubah.',
+            now()->addHours(self::RESCHEDULE_MIN_HOURS)->gte($start) => 'Ubah jadwal hanya bisa paling lambat 24 jam sebelum sesi.',
+            default                                        => null,
+        };
     }
 
     /**

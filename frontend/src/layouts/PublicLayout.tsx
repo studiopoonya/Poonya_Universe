@@ -3,7 +3,8 @@ import { Camera } from 'lucide-react'
 
 export default function PublicLayout() {
   // Homepage is a single fixed screen; other pages scroll normally
-  const isHome = useLocation().pathname === '/'
+  const { pathname } = useLocation()
+  const isHome = pathname === '/'
 
   return (
     <div className={`${isHome ? 'h-dvh overflow-hidden' : 'min-h-screen'} flex flex-col bg-surface-muted`}>
@@ -15,16 +16,22 @@ export default function PublicLayout() {
             </div>
             <span className="font-extrabold text-ink text-lg tracking-tight">Poonya Studio</span>
           </Link>
-          {isHome && (
           <nav className="flex items-center gap-3">
+            {pathname !== '/cek-booking' && (
+              <Link to="/cek-booking" className="text-sm font-extrabold text-gray-500 hover:text-ink px-1">
+                Cek Booking
+              </Link>
+            )}
+            {/* On phones the homepage already has a big booking button */}
+            {isHome && (
             <Link
               to="/booking"
-              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-brand-500 text-white text-sm font-extrabold border-2 border-ink shadow-cartoon-sm hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-cartoon active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all duration-100"
+              className="hidden sm:inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-brand-500 text-white text-sm font-extrabold border-2 border-ink shadow-cartoon-sm hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-cartoon active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all duration-100"
             >
               Book Sekarang ✨
             </Link>
+            )}
           </nav>
-          )}
         </div>
       </header>
 

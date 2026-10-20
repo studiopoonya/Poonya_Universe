@@ -1,7 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\{AuthController, BookingController, SlotController, StudioController};
+use App\Http\Controllers\Api\{AuthController, BookingController, ManageBookingController, SlotController, StudioController};
 use App\Http\Controllers\Admin;
 use App\Http\Controllers\Webhook\PaymentWebhookController;
 use App\Models\Setting;
@@ -25,6 +25,10 @@ Route::get('slots/available',  [SlotController::class, 'available']);
 Route::get('bookings/{booking}/status', [BookingController::class, 'status']);
 Route::get('bookings/order/{orderId}',  [BookingController::class, 'showByOrder']);
 Route::get('quote', [BookingController::class, 'quote'])->middleware('throttle:30,1');
+
+// Customer self-service: Order ID + email (throttled against guessing)
+Route::post('bookings/lookup',     [ManageBookingController::class, 'lookup'])->middleware('throttle:10,1');
+Route::post('bookings/reschedule', [ManageBookingController::class, 'reschedule'])->middleware('throttle:10,1');
 
 // Auth (admin/staff only — accounts are created from the Accounts page, no public sign-up)
 Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:login');

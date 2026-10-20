@@ -108,7 +108,8 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
         </div>
         <h2 className="text-xl font-bold text-gray-900 mb-1">Booking Dikonfirmasi!</h2>
         <p className="text-sm text-gray-400 mb-2">Cek email kamu untuk detail lengkap.</p>
-        <p className="text-xs text-gray-300">Order ID: {bookingResult?.order_id}</p>
+        <p className="text-sm font-extrabold text-ink font-mono">{bookingResult?.order_id}</p>
+        <p className="text-xs text-gray-400 mt-1">Simpan Order ID ini untuk cek atau ubah jadwal di menu Cek Booking.</p>
       </motion.div>
     )
   }

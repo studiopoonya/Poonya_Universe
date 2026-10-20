@@ -65,6 +65,9 @@ return [
     |
     */
 
+    // Public site (React app): Midtrans returns customers here after paying, and emails link to it
+    'frontend_url' => rtrim((string) env('FRONTEND_URL', 'http://localhost:5173'), '/'),
+
     'timezone' => env('APP_TIMEZONE', 'Asia/Jakarta'),
 
     // Reverse proxies whose X-Forwarded-For we trust: '*' or comma-separated IPs/CIDRs.

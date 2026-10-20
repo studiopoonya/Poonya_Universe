@@ -6,6 +6,7 @@ import AdminLayout  from '@/layouts/AdminLayout'
 import HomePage       from '@/pages/HomePage'
 import BookingPage    from '@/pages/BookingPage'
 import BookingSuccessPage from '@/pages/BookingSuccessPage'
+import CheckBookingPage   from '@/pages/CheckBookingPage'
 import LoginPage      from '@/pages/LoginPage'
 import AdminDashboard from '@/pages/admin/AdminDashboard'
 import AdminStudios   from '@/pages/admin/AdminStudios'
@@ -42,6 +43,7 @@ export default function App() {
             <Route path="/"        element={<HomePage />} />
             <Route path="/booking" element={<BookingPage />} />
             <Route path="/booking/success" element={<BookingSuccessPage />} />
+            <Route path="/cek-booking" element={<CheckBookingPage />} />
           </Route>
 
           {/* Admin login (no auth required) */}
