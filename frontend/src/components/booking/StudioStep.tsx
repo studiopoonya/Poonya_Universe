@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useStudios } from '@/hooks/useStudios'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import StepActions from '@/components/ui/StepActions'
@@ -12,187 +12,226 @@ interface Props {
   initialValue?: number
 }
 
+/**
+ * Card size and where each neighbour sits, by screen size. The active card stays at z=0
+ * (pushing it toward the viewer makes Chrome upscale it and blurs the text); depth
+ * comes from sending the neighbours back instead.
+ */
+function useGeometry() {
+  const get = () => (window.innerWidth < 480
+    ? { w: 210, h: 280, stage: 320, x: [0, 112, 190], z: [0, -180, -340], rot: [0, 40, 46], scale: [1, 0.8, 0.62], op: [1, 0.75, 0] }
+    : window.innerWidth < 860
+      ? { w: 240, h: 320, stage: 360, x: [0, 150, 260], z: [0, -170, -330], rot: [0, 42, 46], scale: [1, 0.84, 0.68], op: [1, 0.9, 0.5] }
+      : { w: 260, h: 346, stage: 390, x: [0, 175, 310], z: [0, -180, -340], rot: [0, 42, 46], scale: [1, 0.86, 0.7], op: [1, 0.92, 0.55] })
+  const [g, setG] = useState(get)
+  useEffect(() => {
+    const onResize = () => setG(get())
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  return g
+}
+
 function StudioPhoto({ studio }: { studio: Studio }) {
   if (studio.thumbnail_url) {
-    return <img src={studio.thumbnail_url} alt={studio.name} loading="lazy" draggable={false} className="w-full h-full object-cover" />
+    return <img src={studio.thumbnail_url} alt={studio.name} draggable={false} className="absolute inset-0 w-full h-full object-cover" />
   }
   // No photo yet: studio colour as a placeholder
   return (
     <div
-      className="w-full h-full flex items-center justify-center text-5xl"
-      style={{ background: `linear-gradient(135deg, ${studio.color}33, ${studio.color}88)` }}
+      className="absolute inset-0 flex items-center justify-center text-6xl"
+      style={{ background: `linear-gradient(150deg, ${studio.color}55 0%, ${studio.color} 60%, #1A1A2E 120%)` }}
     >
-      📸
+      <span className="-mt-16 drop-shadow-lg">📸</span>
     </div>
   )
 }
 
-/** Studios as a horizontal, swipeable carousel — big photos read better than a stacked list. */
+/**
+ * Studios as a 3D coverflow: the centred card faces front and is the selection,
+ * neighbours rotate away and recede. Swipe, tap a side card, arrows, dots or ←/→.
+ */
 export default function StudioStep({ onNext, initialValue }: Props) {
   const { data: studios = [], isLoading } = useStudios()
-  const [selected, setSelected] = useState<number | null>(initialValue ?? null)
-  const [active, setActive]     = useState(0) // card in view, for the dots
-  const trackRef = useRef<HTMLDivElement>(null)
+  const g = useGeometry()
+  const [active, setActive] = useState(0)
+  const ready = useRef(false)
+  const touchX = useRef<number | null>(null)
 
-  const cardAt = (i: number) => trackRef.current?.children[i] as HTMLElement | undefined
-
-  const scrollTo = (i: number, smooth = true) => {
-    const track = trackRef.current
-    const card  = cardAt(i)
-    if (!track || !card) return
-    track.scrollTo({ left: card.offsetLeft - (track.clientWidth - card.clientWidth) / 2, behavior: smooth ? 'smooth' : 'auto' })
-  }
-
-  // Coming back to this step: show the studio picked earlier
+  // Start on the studio picked earlier, otherwise the middle one so both sides show
   useEffect(() => {
+    if (ready.current || !studios.length) return
+    ready.current = true
     const i = studios.findIndex((s) => s.id === initialValue)
-    if (i > 0) scrollTo(i, false)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setActive(i >= 0 ? i : Math.floor((studios.length - 1) / 2))
+  }, [studios, initialValue])
+
+  const go = (i: number) => setActive(Math.max(0, Math.min(studios.length - 1, i)))
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.closest('input, textarea, select')) return
+      if (e.key === 'ArrowLeft') setActive((a) => Math.max(0, a - 1))
+      if (e.key === 'ArrowRight') setActive((a) => Math.min(studios.length - 1, a + 1))
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [studios.length])
 
-  const onScroll = () => {
-    const track = trackRef.current
-    if (!track) return
-    const center = track.scrollLeft + track.clientWidth / 2
-    let best = 0
-    studios.forEach((_, i) => {
-      const c = cardAt(i)
-      const prev = cardAt(best)
-      if (c && prev && Math.abs(c.offsetLeft + c.clientWidth / 2 - center) < Math.abs(prev.offsetLeft + prev.clientWidth / 2 - center)) best = i
-    })
-    setActive(best)
+  const cardStyle = (d: number): React.CSSProperties => {
+    const k = Math.min(Math.abs(d), 2)
+    const side = Math.sign(d)
+    const far = Math.abs(d) > 2
+    return {
+      width: g.w,
+      height: g.h,
+      marginLeft: -g.w / 2,
+      marginTop: -g.h / 2,
+      transform: far
+        ? `translate3d(${side * g.x[2]}px,0,-520px) scale(.4)`
+        : `translate3d(${side * g.x[k]}px,0,${g.z[k]}px) rotateY(${-side * g.rot[k]}deg) scale(${g.scale[k]})`,
+      opacity: far ? 0 : g.op[k],
+      zIndex: 50 - Math.abs(d) * 10,
+      pointerEvents: far || g.op[k] === 0 ? 'none' : 'auto',
+      boxShadow: d === 0
+        ? '0 30px 60px -22px rgba(124,58,237,.55), 6px 6px 0 #1A1A2E'
+        : '4px 4px 0 #1A1A2E',
+    }
   }
 
-  const pick = (i: number) => {
-    setSelected(studios[i].id)
-    scrollTo(i)
-  }
+  const current = studios[active]
 
   return (
     <div>
       <h2 className="text-xl md:text-2xl font-extrabold text-ink mb-1">Pilih Studio 🏠</h2>
-      <p className="text-sm text-gray-400 font-semibold mb-5">Geser untuk lihat semua studio, lalu ketuk untuk memilih.</p>
+      <p className="text-sm text-gray-400 font-semibold mb-2">Geser untuk lihat studio lain.</p>
 
       {isLoading ? (
-        <div className="flex gap-4 overflow-hidden">
-          {[1, 2].map((i) => <SkeletonCard key={i} className="h-80 w-[82%] shrink-0" />)}
-        </div>
+        <SkeletonCard className="h-80 w-56 mx-auto my-6" />
       ) : (
         <>
-          <div className="relative">
-            <div
-              ref={trackRef}
-              onScroll={onScroll}
-              className="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-none -mx-5 px-5 md:-mx-10 md:px-10 pt-1 pb-4"
-            >
+          {/* 3D stage — bleeds to the card edges so side cards have room */}
+          <div
+            className="relative -mx-5 md:-mx-10 overflow-hidden select-none touch-pan-y"
+            style={{ height: g.stage + 24 }}
+            onTouchStart={(e) => { touchX.current = e.touches[0].clientX }}
+            onTouchEnd={(e) => {
+              if (touchX.current === null) return
+              const dx = e.changedTouches[0].clientX - touchX.current
+              if (Math.abs(dx) > 40) go(active + (dx < 0 ? 1 : -1))
+              touchX.current = null
+            }}
+          >
+            {/* soft glow under the active card */}
+            <div className="pointer-events-none absolute inset-x-0 bottom-4 mx-auto h-16 max-w-xs rounded-[100%] bg-brand-500/20 blur-2xl" />
+
+            <div className="absolute inset-0" style={{ perspective: 1600, transformStyle: 'preserve-3d' }}>
               {studios.map((studio, i) => {
-                const isSelected = selected === studio.id
+                const d = i - active
                 return (
-                  <motion.button
+                  <button
                     key={studio.id}
                     type="button"
-                    onClick={() => pick(i)}
-                    initial={{ opacity: 0, x: 24 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.06, type: 'spring', stiffness: 320, damping: 28 }}
-                    className={`
-                      snap-center shrink-0 w-[82%] sm:w-[62%] md:w-[46%] text-left rounded-3xl border-2 border-ink overflow-hidden bg-white transition-all duration-100
-                      ${isSelected ? 'shadow-cartoon-lg ring-4 ring-brand-500/30' : 'shadow-cartoon'}
-                    `}
+                    aria-label={studio.name}
+                    aria-current={d === 0}
+                    onClick={() => go(i)}
+                    className="absolute top-1/2 left-1/2 rounded-[22px] border-2 border-ink overflow-hidden bg-ink text-left will-change-transform"
+                    style={{ ...cardStyle(d), transition: 'transform .55s cubic-bezier(.22,.61,.36,1), opacity .55s ease, box-shadow .55s ease' }}
                   >
-                    {/* photo */}
-                    <div className="relative aspect-[4/3] border-b-2 border-ink overflow-hidden">
-                      <StudioPhoto studio={studio} />
-                      <span className="absolute top-3 left-3 text-[11px] font-extrabold px-2.5 py-1 rounded-full bg-white border-2 border-ink shadow-cartoon-sm">
-                        👥 Max {studio.capacity} orang
-                      </span>
-                      {isSelected && (
-                        <motion.div
-                          initial={{ scale: 0 }} animate={{ scale: 1 }}
-                          transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-                          className="absolute top-3 right-3 w-9 h-9 rounded-full bg-brand-500 border-2 border-ink flex items-center justify-center shadow-cartoon-sm"
-                        >
-                          <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
-                        </motion.div>
-                      )}
-                    </div>
-
-                    {/* details */}
-                    <div className={`p-4 transition-colors ${isSelected ? 'bg-brand-50' : 'bg-white'}`}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="w-3 h-3 rounded-full border-2 border-ink shrink-0" style={{ background: studio.color }} />
-                        <p className="font-extrabold text-ink text-base leading-tight truncate">{studio.name}</p>
-                      </div>
-                      <p className="text-xl font-extrabold text-ink">
-                        {formatIDR(studio.price)}<span className="text-xs font-bold text-gray-400"> / sesi</span>
+                    <StudioPhoto studio={studio} />
+                    {/* sheen */}
+                    <div className="absolute inset-0" style={{ background: 'radial-gradient(120% 80% at 30% 20%, rgba(255,255,255,.22), transparent 60%)' }} />
+                    <span className="absolute top-3 left-3 text-[11px] font-extrabold px-2.5 py-1 rounded-full bg-white border-2 border-ink">
+                      👥 Max {studio.capacity}
+                    </span>
+                    {/* label */}
+                    <div
+                      className="absolute inset-x-0 bottom-0 px-4 pb-4 pt-12"
+                      style={{ background: 'linear-gradient(to top, rgba(26,26,46,.95), rgba(26,26,46,.5) 55%, transparent)' }}
+                    >
+                      <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/70">
+                        {studio.name.split(' — ')[1] ?? 'Studio'}
                       </p>
-                      {studio.weekend_price && studio.weekend_price !== studio.price && (
-                        <p className="text-[11px] font-bold text-amber-600">Weekend {formatIDR(studio.weekend_price)}</p>
-                      )}
-                      <p className="text-xs text-gray-400 font-semibold mt-2 leading-relaxed line-clamp-2">{studio.description}</p>
-                      {!!studio.features?.length && (
-                        <div className="flex flex-wrap gap-1.5 mt-3">
-                          {studio.features.slice(0, 4).map((f) => (
-                            <span
-                              key={f}
-                              className="text-[10px] font-extrabold px-2 py-0.5 rounded-full border-2"
-                              style={{ background: studio.color + '20', color: studio.color, borderColor: studio.color }}
-                            >
-                              {f}
-                            </span>
-                          ))}
-                          {studio.features.length > 4 && (
-                            <span className="text-[10px] font-extrabold px-2 py-0.5 text-gray-400">+{studio.features.length - 4}</span>
-                          )}
-                        </div>
-                      )}
+                      <p className="text-lg font-extrabold text-white leading-tight">{studio.name.split(' — ')[0]}</p>
+                      <p className="text-sm font-extrabold text-amber-300 mt-0.5">
+                        {formatIDR(studio.price)}<span className="text-white/60 font-bold text-xs"> / sesi</span>
+                      </p>
                     </div>
-                  </motion.button>
+                  </button>
                 )
               })}
             </div>
-
-            {/* arrows for mouse users (phones just swipe) */}
-            {studios.length > 1 && (
-              <>
-                <button
-                  type="button" aria-label="Studio sebelumnya"
-                  onClick={() => scrollTo(Math.max(0, active - 1))}
-                  disabled={active === 0}
-                  className="hidden md:flex absolute -left-5 top-1/3 w-10 h-10 rounded-full bg-white border-2 border-ink shadow-cartoon-sm items-center justify-center text-lg font-extrabold disabled:opacity-0 transition-opacity"
-                >‹</button>
-                <button
-                  type="button" aria-label="Studio berikutnya"
-                  onClick={() => scrollTo(Math.min(studios.length - 1, active + 1))}
-                  disabled={active === studios.length - 1}
-                  className="hidden md:flex absolute -right-5 top-1/3 w-10 h-10 rounded-full bg-white border-2 border-ink shadow-cartoon-sm items-center justify-center text-lg font-extrabold disabled:opacity-0 transition-opacity"
-                >›</button>
-              </>
-            )}
           </div>
 
-          {/* dots */}
+          {/* controls */}
           {studios.length > 1 && (
-            <div className="flex justify-center gap-1.5 mt-1">
-              {studios.map((s, i) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  aria-label={`Lihat ${s.name}`}
-                  onClick={() => scrollTo(i)}
-                  className={`h-2 rounded-full border border-ink transition-all ${i === active ? 'w-6 bg-brand-500' : 'w-2 bg-white'}`}
-                />
-              ))}
+            <div className="flex items-center justify-center gap-5 mt-1">
+              <button
+                type="button" aria-label="Studio sebelumnya" onClick={() => go(active - 1)} disabled={active === 0}
+                className="w-10 h-10 rounded-full bg-white border-2 border-ink shadow-cartoon-sm grid place-items-center text-lg font-extrabold text-ink hover:scale-110 transition disabled:opacity-30 disabled:hover:scale-100"
+              >‹</button>
+              <div className="flex items-center gap-2">
+                {studios.map((s, i) => (
+                  <button
+                    key={s.id} type="button" aria-label={`Lihat ${s.name}`} onClick={() => go(i)}
+                    className="h-2.5 rounded-full border border-ink transition-all duration-300"
+                    style={i === active
+                      ? { width: 28, background: 'linear-gradient(90deg,#7C3AED,#F472B6)', boxShadow: '0 0 12px rgba(124,58,237,.55)' }
+                      : { width: 10, background: '#fff' }}
+                  />
+                ))}
+              </div>
+              <button
+                type="button" aria-label="Studio berikutnya" onClick={() => go(active + 1)} disabled={active === studios.length - 1}
+                className="w-10 h-10 rounded-full bg-white border-2 border-ink shadow-cartoon-sm grid place-items-center text-lg font-extrabold text-ink hover:scale-110 transition disabled:opacity-30 disabled:hover:scale-100"
+              >›</button>
             </div>
           )}
+
+          {/* details of the centred studio */}
+          <AnimatePresence mode="wait">
+            {current && (
+              <motion.div
+                key={current.id}
+                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+                className="mt-5 rounded-2xl bg-surface-subtle border-2 border-ink/10 p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-3 h-3 rounded-full border-2 border-ink shrink-0" style={{ background: current.color }} />
+                    <p className="font-extrabold text-ink truncate">{current.name}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="font-extrabold text-ink">{formatIDR(current.price)}</p>
+                    {current.weekend_price && current.weekend_price !== current.price && (
+                      <p className="text-[11px] font-bold text-amber-600">Weekend {formatIDR(current.weekend_price)}</p>
+                    )}
+                  </div>
+                </div>
+                {current.description && <p className="text-xs text-gray-500 font-semibold mt-2 leading-relaxed">{current.description}</p>}
+                {!!current.features?.length && (
+                  <div className="flex flex-wrap gap-1.5 mt-3">
+                    {current.features.map((f) => (
+                      <span
+                        key={f}
+                        className="text-[10px] font-extrabold px-2.5 py-1 rounded-full border-2"
+                        style={{ background: current.color + '20', color: current.color, borderColor: current.color }}
+                      >
+                        {f}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </>
       )}
 
       <StepActions>
-        <PrimaryButton disabled={!selected} onClick={() => selected && onNext({ studio_id: selected })}>
-          {selected ? `Lanjut dengan ${studios.find((s) => s.id === selected)?.name.split(' — ')[0] ?? 'studio ini'} →` : 'Pilih studio dulu'}
+        <PrimaryButton disabled={!current} onClick={() => current && onNext({ studio_id: current.id })}>
+          {current ? `Lanjut dengan ${current.name.split(' — ')[0]} →` : 'Lanjut →'}
         </PrimaryButton>
       </StepActions>
     </div>
