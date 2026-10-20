@@ -29,8 +29,9 @@ class SlotController extends Controller
         $query = fn () => Slot::where('studio_id', $request->studio_id)->forDate($date->toDateString());
 
         // Slots used to exist only after someone ran `slots:generate` by hand, so dates past the
-        // last run showed nothing. Create the day on demand, within the booking horizon.
-        if (! $query()->exists() && $date->lte(today()->addDays(SlotGenerator::HORIZON_DAYS))) {
+        // last run showed nothing. Fill the day on demand (idempotent: one INSERT IGNORE), within
+        // the booking horizon — also restores slots after hours change or a holiday is lifted.
+        if ($date->lte(today()->addDays(SlotGenerator::HORIZON_DAYS))) {
             SlotGenerator::forDay(Studio::findOrFail($request->studio_id), $date);
         }
 

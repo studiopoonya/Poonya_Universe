@@ -4,6 +4,13 @@
 // back to Laravel's English messages via APP_FALLBACK_LOCALE=en.
 return [
     'accepted'       => ':attribute harus disetujui.',
+    'after'          => ':attribute harus setelah :date.',
+    'date_format'    => 'Format :attribute harus :format.',
+    'distinct'       => ':attribute tidak boleh duplikat.',
+    'size'           => [
+        'array'  => ':attribute harus berisi :size item.',
+        'string' => ':attribute harus :size karakter.',
+    ],
     'after_or_equal' => ':attribute harus tanggal setelah atau sama dengan :date.',
     'array'          => ':attribute harus berupa daftar.',
     'between'        => [
@@ -77,5 +84,7 @@ return [
         'max_uses'          => 'Kuota',
         'starts_at'         => 'Tanggal mulai',
         'ends_at'           => 'Tanggal berakhir',
+        'reason'            => 'Keterangan',
+        'hours'             => 'Jam operasional',
     ],
 ];

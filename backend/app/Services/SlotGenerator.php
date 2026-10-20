@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\{OperationalHour, Slot, Studio};
+use App\Models\{ClosedDate, OperationalHour, Slot, Studio};
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -25,7 +25,8 @@ class SlotGenerator
 
         if (! $opHour || ! $studio->is_active) return 0;
 
-        $day     = $date->toDateString();
+        $day = $date->toDateString();
+        if (ClosedDate::whereDate('date', $day)->exists()) return 0; // holiday / day off
         $current = Carbon::parse("$day {$opHour->open_time}");
         $closeAt = Carbon::parse("$day {$opHour->close_time}");
         $now     = now();

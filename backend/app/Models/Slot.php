@@ -18,6 +18,12 @@ class Slot extends Model
         return $this->hasOne(Booking::class);
     }
 
+    /** A slot keeps every booking made on it over time (expired/cancelled ones included). */
+    public function bookings()
+    {
+        return $this->hasMany(Booking::class);
+    }
+
     /** True once the slot's start time has passed (app timezone, WIB). */
     public function hasStarted(): bool
     {

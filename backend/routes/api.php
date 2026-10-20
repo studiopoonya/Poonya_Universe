@@ -64,6 +64,12 @@ Route::middleware(['auth:sanctum', 'admin'])
             Route::post('slots/generate',        [Admin\SlotController::class, 'generate']);
             Route::patch('slots/{slot}/block',   [Admin\SlotController::class, 'block']);
             Route::patch('slots/{slot}/unblock', [Admin\SlotController::class, 'unblock']);
+
+            Route::get('schedule',                              [Admin\ScheduleController::class, 'index']);
+            Route::put('schedule/hours',                        [Admin\ScheduleController::class, 'updateHours']);
+            Route::get('schedule/slots',                        [Admin\ScheduleController::class, 'slots']);
+            Route::post('schedule/closed-dates',                [Admin\ScheduleController::class, 'addClosedDate']);
+            Route::delete('schedule/closed-dates/{closedDate}', [Admin\ScheduleController::class, 'removeClosedDate']);
         });
 
         Route::apiResource('promo-codes', Admin\PromoCodeController::class)->except(['show'])->middleware('permission:promos');
