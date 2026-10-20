@@ -5,7 +5,7 @@ import { format, parseISO } from 'date-fns'
 import { id as idLocale } from 'date-fns/locale'
 import toast from 'react-hot-toast'
 import api from '@/lib/axios'
-import { formatIDR } from '@/lib/utils'
+import { formatIDR, downloadFile } from '@/lib/utils'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import DateTimeStep from '@/components/booking/DateTimeStep'
 import { durationLabel } from '@/lib/sessions'
@@ -127,6 +127,14 @@ export default function CheckBookingPage() {
                       </div>
                     ))}
                   </div>
+                  {booking.payment_status === 'paid' && (
+                    <PrimaryButton
+                      variant="ghost" className="w-full mb-2"
+                      onClick={() => downloadFile('/bookings/receipt', {}, `Struk-${booking.order_id}.pdf`, creds()).catch(() => toast.error('Gagal mengunduh struk. Coba lagi.'))}
+                    >
+                      🧾 Unduh Struk (PDF)
+                    </PrimaryButton>
+                  )}
                   {booking.payment_status === 'refund_pending' && (
                     <p className="text-xs font-semibold text-orange-600 mb-3">💸 Pembayaran kamu sedang diproses untuk refund oleh admin.</p>
                   )}

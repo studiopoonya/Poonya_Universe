@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { format, parseISO } from 'date-fns'
 import { id as idLocale } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, CheckCircle, XCircle, Download } from 'lucide-react'
+import { Search, X, CheckCircle, XCircle, Download, Receipt } from 'lucide-react'
 import toast from 'react-hot-toast'
 import api from '@/lib/axios'
 import { formatIDR, downloadFile } from '@/lib/utils'
@@ -330,6 +330,15 @@ export default function AdminBookings() {
                       className="text-xs font-extrabold text-orange-600 border-2 border-orange-300 bg-orange-50 px-2.5 py-1.5 rounded-xl"
                     >
                       Sudah Refund
+                    </button>
+                  )}
+                  {b.payment?.status === 'paid' && (
+                    <button
+                      onClick={() => downloadFile(`/admin/bookings/${b.id}/receipt`, {}, `Struk-${b.order_id}.pdf`).catch(() => toast.error('Gagal membuat struk.'))}
+                      title="Unduh struk PDF"
+                      className="flex items-center gap-1 text-xs font-extrabold text-brand-600 border-2 border-brand-500/40 bg-brand-50 px-2.5 py-1.5 rounded-xl hover:bg-brand-100 transition-colors"
+                    >
+                      <Receipt className="w-3.5 h-3.5" strokeWidth={2.5} /> Struk
                     </button>
                   )}
                   {(b.status === 'pending' || b.status === 'onsite') && (

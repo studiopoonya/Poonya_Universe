@@ -6,7 +6,7 @@ import { id as idLocale } from 'date-fns/locale'
 import toast from 'react-hot-toast'
 import api from '@/lib/axios'
 import { openSnap } from '@/lib/snap'
-import { formatIDR } from '@/lib/utils'
+import { formatIDR, downloadFile } from '@/lib/utils'
 import { durationLabel } from '@/lib/sessions'
 import { useStudios } from '@/hooks/useStudios'
 import { useBookingStatus } from '@/hooks/useBookingStatus'
@@ -185,6 +185,16 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
         <p className="text-sm text-gray-400 mb-2">Cek email kamu untuk detail lengkap.</p>
         <p className="text-sm font-extrabold text-ink font-mono">{bookingResult?.order_id}</p>
         <p className="text-xs text-gray-400 mt-1">Simpan Order ID ini untuk cek atau ubah jadwal di menu Cek Booking.</p>
+        {bookingResult && (
+          <button
+            type="button"
+            onClick={() => downloadFile('/bookings/receipt', {}, `Struk-${bookingResult.order_id}.pdf`, { order_id: bookingResult.order_id, email: booking.customer_email })
+              .catch(() => toast.error('Gagal mengunduh struk. Coba lagi dari menu Cek Booking.'))}
+            className="mt-5 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border-2 border-ink bg-white text-sm font-extrabold text-ink shadow-cartoon-sm"
+          >
+            🧾 Unduh Struk (PDF)
+          </button>
+        )}
       </motion.div>
     )
   }

@@ -157,4 +157,15 @@ class BookingController extends Controller
 
         return response()->json(['message' => 'Booking dikonfirmasi.']);
     }
+
+    /** PDF receipt for a paid booking (e.g. a customer asks for one at the desk). */
+    public function receipt(Booking $booking): \Illuminate\Http\Response
+    {
+        abort_unless(\App\Services\Receipt::available($booking), 422, 'Struk hanya untuk booking yang sudah lunas.');
+
+        return response(\App\Services\Receipt::render($booking), 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . \App\Services\Receipt::filename($booking) . '"',
+        ]);
+    }
 }

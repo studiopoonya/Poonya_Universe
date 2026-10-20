@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\{Booking, Slot};
-use App\Services\{Pricing, SlotBooker};
+use App\Services\{Pricing, Receipt, SlotBooker};
 use Illuminate\Http\{JsonResponse, Request};
 use Illuminate\Support\Facades\DB;
 
@@ -60,6 +60,18 @@ class ManageBookingController extends Controller
         });
 
         return response()->json([...$this->present($booking), 'message' => 'Jadwal berhasil diubah. Detail baru sudah dikirim ke email kamu.']);
+    }
+
+    /** PDF receipt — only once the booking is paid. */
+    public function receipt(Request $request): \Illuminate\Http\Response
+    {
+        $booking = $this->find($request);
+        abort_unless(Receipt::available($booking), 422, 'Struk tersedia setelah pembayaran lunas.');
+
+        return response(Receipt::render($booking), 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . Receipt::filename($booking) . '"',
+        ]);
     }
 
     /** Order ID + the email used at checkout — both must match. */

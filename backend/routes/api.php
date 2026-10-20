@@ -31,6 +31,7 @@ Route::get('quote', [BookingController::class, 'quote'])->middleware('throttle:3
 // Customer self-service: Order ID + email (throttled against guessing)
 Route::post('bookings/lookup',     [ManageBookingController::class, 'lookup'])->middleware('throttle:10,1');
 Route::post('bookings/reschedule', [ManageBookingController::class, 'reschedule'])->middleware('throttle:10,1');
+Route::post('bookings/receipt',    [ManageBookingController::class, 'receipt'])->middleware('throttle:10,1');
 Route::post('bookings/pay-online', [BookingController::class, 'payOnline'])->middleware('throttle:bookings');
 
 // Auth (admin/staff only — accounts are created from the Accounts page, no public sign-up)
@@ -64,6 +65,7 @@ Route::middleware(['auth:sanctum', 'admin'])
             Route::patch('bookings/{booking}/cancel', [Admin\BookingController::class, 'cancel']);
             Route::patch('bookings/{booking}/confirm',[Admin\BookingController::class, 'confirm']);
             Route::patch('bookings/{booking}/refunded', [Admin\BookingController::class, 'markRefunded']);
+            Route::get('bookings/{booking}/receipt',    [Admin\BookingController::class, 'receipt']);
         });
 
         Route::middleware('permission:studios')->group(function () {

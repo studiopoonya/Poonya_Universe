@@ -31,7 +31,7 @@ class BookingConfirmed extends Notification implements ShouldQueue
         $booking = $this->booking->loadMissing(['studio', 'slot']);
         $slot    = $booking->slot;
 
-        return (new MailMessage)
+        $mail = (new MailMessage)
             ->subject(match ($this->kind) {
                 'rescheduled' => 'Jadwal Booking Diubah — ',
                 'onsite'      => 'Reservasi Bayar di Tempat — ',
@@ -51,6 +51,17 @@ class BookingConfirmed extends Notification implements ShouldQueue
             ->action('Cek / Ubah Jadwal', rtrim(config('app.frontend_url'), '/') . '/cek-booking?order_id=' . urlencode($booking->order_id))
             ->line('Ubah jadwal bisa dilakukan sekali, paling lambat 24 jam sebelum sesi.')
             ->line('Sampai jumpa di studio!');
+
+        // Paid → the PDF receipt goes along (a broken PDF must never stop the confirmation)
+        if ($this->kind !== 'onsite' && \App\Services\Receipt::available($booking)) {
+            try {
+                $mail->attachData(\App\Services\Receipt::render($booking), \App\Services\Receipt::filename($booking), ['mime' => 'application/pdf']);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        return $mail;
     }
 
     public function toArray(object $notifiable): array
