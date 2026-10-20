@@ -127,4 +127,20 @@ class AdminFeaturesTest extends TestCase
             ->assertJson(['per_page' => 10, 'current_page' => 2, 'total' => 12, 'from' => 11, 'to' => 12]);
         $this->asUser($admin)->getJson('/api/admin/bookings?per_page=999')->assertJsonPath('per_page', 20);
     }
+
+    public function test_bookings_list_sorts_by_creation_or_session(): void
+    {
+        $studio = $this->studio();
+        $late  = $this->book($this->slot($studio, $this->weekday(12), '15:00')); // made first, later session
+        $soon  = $this->book($this->slot($studio, $this->weekday(5), '10:00'));
+        $this->app['cache']->store()->flush();
+        $admin = $this->admin();
+
+        $ids = fn (string $q) => array_column($this->asUser($admin)->getJson("/api/admin/bookings{$q}")->json('data'), 'id');
+
+        $this->assertSame([$soon->id, $late->id], $ids(''));                  // latest made first
+        $this->assertSame([$late->id, $soon->id], $ids('?sort=oldest'));
+        $this->assertSame([$soon->id, $late->id], $ids('?sort=session_asc'));
+        $this->assertSame([$late->id, $soon->id], $ids('?sort=session_desc'));
+    }
 }

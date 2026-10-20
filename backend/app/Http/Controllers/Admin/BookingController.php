@@ -19,7 +19,7 @@ class BookingController extends Controller
         // ?per_page=10|20|50 from the list; anything else falls back to 20
         $perPage = in_array((int) $request->per_page, [10, 20, 50], true) ? (int) $request->per_page : 20;
 
-        return response()->json($this->filtered($request)->latest('bookings.id')->paginate($perPage));
+        return response()->json($this->sorted($this->filtered($request), $request->sort)->paginate($perPage));
     }
 
     /** Same filters as the list, as a CSV that opens directly in Excel (Indonesian locale). */
@@ -29,8 +29,8 @@ class BookingController extends Controller
 
         $query = $this->filtered($request)
             ->when($request->month, fn ($q) => $q->whereHas('slot', fn ($s) => $s->where('date', 'like', "{$request->month}-%")))
-            ->with('promoCode')
-            ->orderByDesc('id');
+            ->with('promoCode');
+        $query = $this->sorted($query, $request->sort);
 
         $name = 'booking-' . ($request->month ?: now()->format('Y-m-d')) . '.csv';
 
@@ -65,6 +65,22 @@ class BookingController extends Controller
 
             fclose($out);
         }, $name, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /**
+     * latest (default) / oldest = when the booking was made;
+     * session_desc / session_asc = by the session's date and time.
+     */
+    private function sorted($query, ?string $sort)
+    {
+        $slot = fn (string $col) => \App\Models\Slot::select($col)->whereColumn('slots.id', 'bookings.slot_id');
+
+        return match ($sort) {
+            'oldest'       => $query->orderBy('bookings.id'),
+            'session_desc' => $query->orderByDesc($slot('date'))->orderByDesc($slot('start_time'))->orderByDesc('bookings.id'),
+            'session_asc'  => $query->orderBy($slot('date'))->orderBy($slot('start_time'))->orderBy('bookings.id'),
+            default        => $query->orderByDesc('bookings.id'),
+        };
     }
 
     private function filtered(Request $request)

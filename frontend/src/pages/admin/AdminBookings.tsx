@@ -130,6 +130,15 @@ const STATUS_OPTIONS = [
   { value: 'refund',    label: '💸 Perlu Refund' },
 ]
 
+type SortKey = 'latest' | 'oldest' | 'session_desc' | 'session_asc'
+
+const SORT_OPTIONS: { value: SortKey; label: string; hint: string }[] = [
+  { value: 'latest',       label: 'Terbaru dibuat',  hint: 'Booking yang paling baru masuk' },
+  { value: 'oldest',       label: 'Terlama dibuat',  hint: 'Booking yang paling lama masuk' },
+  { value: 'session_asc',  label: 'Jadwal terdekat', hint: 'Tanggal sesi paling awal dulu' },
+  { value: 'session_desc', label: 'Jadwal terjauh',  hint: 'Tanggal sesi paling akhir dulu' },
+]
+
 export default function AdminBookings() {
   const qc = useQueryClient()
 
@@ -149,18 +158,20 @@ export default function AdminBookings() {
   const [statusFilter, setStatusFilter] = useState(params.get('status') ?? '') // e.g. ?status=refund from the dashboard
   const [exporting,    setExporting]    = useState(false)
   const [dateFilter,   setDateFilter]   = useState('')
+  const [sort,         setSort]         = useState<SortKey>('latest')
   const [page,         setPage]         = useState(1)
   const [perPage,      setPerPage]      = useState(20)
   const [actionTarget, setActionTarget] = useState<{ action: ActionType; booking: Booking } | null>(null)
 
   const { data, isLoading } = useQuery<PaginatedBookings>({
-    queryKey: ['admin', 'bookings', search, statusFilter, dateFilter, page, perPage],
+    queryKey: ['admin', 'bookings', search, statusFilter, dateFilter, sort, page, perPage],
     queryFn: () =>
       api.get('/admin/bookings', {
         params: {
           search: search   || undefined,
           status: statusFilter || undefined,
           date:   dateFilter   || undefined,
+          sort:   sort !== 'latest' ? sort : undefined,
           page,
           per_page: perPage,
         },
@@ -176,11 +187,11 @@ export default function AdminBookings() {
 
   const clearFilters = () => {
     setSearch(''); setSearchInput('')
-    setStatusFilter(''); setDateFilter('')
+    setStatusFilter(''); setDateFilter(''); setSort('latest')
     setPage(1)
   }
 
-  const hasFilters = search || statusFilter || dateFilter
+  const hasFilters = search || statusFilter || dateFilter || sort !== 'latest'
   const bookings   = data?.data ?? []
 
   const selectCls = 'px-3.5 py-2.5 rounded-2xl border-2 border-ink text-sm font-extrabold text-ink bg-white shadow-cartoon-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 transition-all'
@@ -200,7 +211,7 @@ export default function AdminBookings() {
           onClick={async () => {
             setExporting(true)
             try {
-              await downloadFile('/admin/bookings/export', { search: search || undefined, status: statusFilter || undefined, date: dateFilter || undefined }, 'booking.csv')
+              await downloadFile('/admin/bookings/export', { search: search || undefined, status: statusFilter || undefined, date: dateFilter || undefined, sort: sort !== 'latest' ? sort : undefined }, 'booking.csv')
             } catch { toast.error('Gagal export.') } finally { setExporting(false) }
           }}
           className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-ink bg-amber-400 text-sm font-extrabold text-ink shadow-cartoon-sm disabled:opacity-50"
@@ -237,6 +248,11 @@ export default function AdminBookings() {
           value={dateFilter} clearable placeholder="Tanggal sesi"
           onChange={(v) => { setDateFilter(v); setPage(1) }}
           className="w-full sm:w-56"
+        />
+
+        <Select
+          value={sort} onChange={(v) => { setSort(v as SortKey); setPage(1) }}
+          options={SORT_OPTIONS} className="w-full sm:w-56" ariaLabel="Urutkan"
         />
 
         {hasFilters && (
