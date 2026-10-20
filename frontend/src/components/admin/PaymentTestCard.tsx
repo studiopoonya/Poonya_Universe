@@ -137,7 +137,7 @@ export default function PaymentTestCard({ gatewayLabel }: { gatewayLabel: string
       )}
 
       <p className="text-[11px] font-semibold text-gray-400 mt-3">
-        Di mode Production uang tes masuk sungguhan ke akun merchant. Sebagian metode punya minimum nominal (misalnya QRIS di Xendit) — kalau ditolak, pesan dari gateway akan muncul di sini.
+        Di mode Production uang tes masuk sungguhan ke akun merchant. Sebagian metode punya minimum nominal — kalau ditolak, pesan dari gateway akan muncul di sini.
       </p>
     </div>
   )
