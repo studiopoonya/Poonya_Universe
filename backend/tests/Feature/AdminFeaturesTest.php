@@ -127,4 +127,18 @@ class AdminFeaturesTest extends TestCase
 
         \Illuminate\Support\Facades\Http::assertSent(fn ($r) => $r->url() === 'https://app.midtrans.com/snap/v1/transactions');
     }
+
+    public function test_bookings_list_paginates_with_a_chosen_page_size(): void
+    {
+        $studio = $this->studio();
+        foreach (range(9, 20) as $h) {
+            $this->book($this->slot($studio, $this->weekday(20 + $h % 3), sprintf('%02d:00', $h)));
+            $this->app['cache']->store()->flush(); // stay under the per-IP booking limit
+        }
+        $admin = $this->admin();
+
+        $this->asUser($admin)->getJson('/api/admin/bookings?per_page=10&page=2')
+            ->assertJson(['per_page' => 10, 'current_page' => 2, 'total' => 12, 'from' => 11, 'to' => 12]);
+        $this->asUser($admin)->getJson('/api/admin/bookings?per_page=999')->assertJsonPath('per_page', 20);
+    }
 }

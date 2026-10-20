@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { id as idLocale } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -10,6 +10,7 @@ import api from '@/lib/axios'
 import { formatIDR, downloadFile } from '@/lib/utils'
 import type { Booking } from '@/types'
 import CollectCashModal from '@/components/admin/CollectCashModal'
+import Pagination from '@/components/admin/Pagination'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,9 @@ interface PaginatedBookings {
   current_page: number
   last_page: number
   total: number
+  per_page: number
+  from: number | null
+  to: number | null
 }
 
 type ActionType = 'cancel' | 'confirm'
@@ -144,10 +148,11 @@ export default function AdminBookings() {
   const [exporting,    setExporting]    = useState(false)
   const [dateFilter,   setDateFilter]   = useState('')
   const [page,         setPage]         = useState(1)
+  const [perPage,      setPerPage]      = useState(20)
   const [actionTarget, setActionTarget] = useState<{ action: ActionType; booking: Booking } | null>(null)
 
   const { data, isLoading } = useQuery<PaginatedBookings>({
-    queryKey: ['admin', 'bookings', search, statusFilter, dateFilter, page],
+    queryKey: ['admin', 'bookings', search, statusFilter, dateFilter, page, perPage],
     queryFn: () =>
       api.get('/admin/bookings', {
         params: {
@@ -155,8 +160,10 @@ export default function AdminBookings() {
           status: statusFilter || undefined,
           date:   dateFilter   || undefined,
           page,
+          per_page: perPage,
         },
       }).then((r) => r.data),
+    placeholderData: keepPreviousData, // keep the current page on screen while the next loads
   })
 
   const handleSearch = (e: React.FormEvent) => {
@@ -285,17 +292,17 @@ export default function AdminBookings() {
                 </div>
 
                 {/* studio */}
-                <div className="hidden sm:block shrink-0 w-32">
+                <div className="hidden sm:block shrink-0 w-44">
                   <p className="text-xs font-extrabold text-gray-700 truncate">
                     {(b as any).studio?.name ?? '—'}
                   </p>
                   <p className="text-xs font-bold text-gray-400 mt-0.5">
-                    {formatIDR((b as any).studio?.price ?? b.payment?.amount ?? 0)}
+                    {formatIDR(b.payment?.amount ?? (b as any).studio?.price ?? 0)}
                   </p>
                 </div>
 
                 {/* status */}
-                <div className="shrink-0 flex flex-col items-end gap-1">
+                <div className="shrink-0 sm:w-40 flex flex-col items-end gap-1">
                   <StatusBadge status={b.status} />
                   {b.payment?.status === 'refund_pending' && (
                     <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full border-2 bg-orange-50 text-orange-600 border-orange-300">
@@ -313,7 +320,7 @@ export default function AdminBookings() {
                 </div>
 
                 {/* actions */}
-                <div className="shrink-0 flex gap-2 w-full sm:w-auto justify-end empty:hidden">
+                <div className="shrink-0 flex gap-2 w-full sm:w-[216px] justify-end empty:hidden sm:empty:flex">
                   {b.payment?.status === 'refund_pending' && (
                     <button
                       onClick={() => { if (confirm(`Uang ${formatIDR(b.payment!.amount)} untuk ${b.customer_name} sudah dikembalikan?`)) markRefunded.mutate(b) }}
@@ -346,26 +353,17 @@ export default function AdminBookings() {
       </div>
 
       {/* pagination */}
-      {data && data.last_page > 1 && (
-        <div className="flex items-center justify-center gap-3 mt-5">
-          <button
-            disabled={page === 1}
-            onClick={() => setPage((p) => p - 1)}
-            className="px-5 py-2.5 rounded-2xl border-2 border-ink text-sm font-extrabold text-gray-600 bg-white shadow-cartoon-sm hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-cartoon disabled:opacity-30 disabled:cursor-not-allowed active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all duration-100"
-          >
-            ← Prev
-          </button>
-          <span className="text-sm font-extrabold text-gray-500">
-            {page} / {data.last_page}
-          </span>
-          <button
-            disabled={page === data.last_page}
-            onClick={() => setPage((p) => p + 1)}
-            className="px-5 py-2.5 rounded-2xl border-2 border-ink text-sm font-extrabold text-gray-600 bg-white shadow-cartoon-sm hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-cartoon disabled:opacity-30 disabled:cursor-not-allowed active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all duration-100"
-          >
-            Next →
-          </button>
-        </div>
+      {data && (
+        <Pagination
+          page={data.current_page}
+          lastPage={data.last_page}
+          total={data.total}
+          from={data.from}
+          to={data.to}
+          perPage={perPage}
+          onPage={(p) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+          onPerPage={(n) => { setPerPage(n); setPage(1) }}
+        />
       )}
 
       {/* action modal — an onsite customer paying cash gets the change calculator */}

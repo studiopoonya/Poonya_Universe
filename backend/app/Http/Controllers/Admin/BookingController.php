@@ -20,7 +20,10 @@ class BookingController extends Controller
     {
         Booking::expireStale();
 
-        return response()->json($this->filtered($request)->latest()->paginate(20));
+        // ?per_page=10|20|50 from the list; anything else falls back to 20
+        $perPage = in_array((int) $request->per_page, [10, 20, 50], true) ? (int) $request->per_page : 20;
+
+        return response()->json($this->filtered($request)->latest('bookings.id')->paginate($perPage));
     }
 
     /** Same filters as the list, as a CSV that opens directly in Excel (Indonesian locale). */
