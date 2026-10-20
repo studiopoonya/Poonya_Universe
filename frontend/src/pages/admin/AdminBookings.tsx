@@ -270,7 +270,8 @@ export default function AdminBookings() {
                     {b.slot?.date ? format(parseISO(b.slot.date), 'd MMM yyyy', { locale: idLocale }) : '—'}
                   </p>
                   <p className="text-xs font-bold text-gray-400 mt-0.5">
-                    {b.slot?.start_time?.slice(0, 5)} – {b.slot?.end_time?.slice(0, 5)}
+                    {b.slot?.start_time?.slice(0, 5)} – {b.end_time ?? b.slot?.end_time?.slice(0, 5)}
+                    {(b.sessions ?? 1) > 1 && <span className="text-brand-500"> · {b.sessions} sesi</span>}
                   </p>
                 </div>
 

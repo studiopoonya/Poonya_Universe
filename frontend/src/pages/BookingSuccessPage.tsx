@@ -69,7 +69,7 @@ export default function BookingSuccessPage() {
               {[
                 ['Studio',   data.studio],
                 ['Tanggal',  data.date && format(parseISO(data.date), 'EEEE, d MMMM yyyy', { locale: idLocale })],
-                ['Waktu',    data.start_time && `${data.start_time} – ${data.end_time}`],
+                ['Waktu',    data.start_time && `${data.start_time} – ${data.end_time} WIB`],
                 ['Order ID', data.order_id],
               ].map(([label, value]) => value && (
                 <div key={label} className="flex justify-between items-start gap-4 py-2.5 border-b border-white last:border-0">

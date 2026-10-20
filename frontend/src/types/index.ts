@@ -28,6 +28,7 @@ export interface BookingPayload {
   customer_email: string
   customer_phone: string
   notes?: string
+  sessions?: number
 }
 
 export interface BookingResponse {
@@ -40,6 +41,8 @@ export interface BookingResponse {
 }
 
 export interface Quote {
+  per_session: number
+  sessions: number
   base_price: number
   is_weekend: boolean
   discount: number
@@ -60,6 +63,9 @@ export interface Booking {
   confirmed_at?: string
   studio: Studio
   slot: { date: string; start_time: string; end_time: string }
+  /** End of the last session (HH:MM) */
+  end_time?: string | null
+  sessions?: number
   payment?: { amount: number; status: string; method?: string }
 }
 

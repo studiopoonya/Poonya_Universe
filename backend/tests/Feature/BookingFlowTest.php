@@ -27,7 +27,7 @@ class BookingFlowTest extends TestCase
         $slot = $this->slot($this->studio());
         $first = $this->book($slot);
         $first->update(['status' => 'cancelled']);
-        $first->releaseSlot();
+        $first->releaseSlots();
 
         $this->postJson('/api/bookings', $this->bookingPayload($slot))->assertCreated();
     }

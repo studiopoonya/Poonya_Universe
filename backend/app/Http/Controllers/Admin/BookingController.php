@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreBookingRequest;
 use App\Jobs\ExpireBooking;
 use App\Models\{Booking, Payment, Slot, Studio};
-use App\Services\{PaymentGatewayService, Pricing};
+use App\Services\{PaymentGatewayService, Pricing, SlotBooker};
 use Illuminate\Http\{JsonResponse, Request};
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -38,7 +38,7 @@ class BookingController extends Controller
         return response()->streamDownload(function () use ($query) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM so Excel shows names correctly
-            fputcsv($out, ['Order ID', 'Tanggal Sesi', 'Jam', 'Studio', 'Nama', 'Email', 'No. HP', 'Status Booking',
+            fputcsv($out, ['Order ID', 'Tanggal Sesi', 'Jam', 'Sesi', 'Studio', 'Nama', 'Email', 'No. HP', 'Status Booking',
                 'Kode Promo', 'Diskon', 'Total Bayar', 'Status Bayar', 'Metode', 'Dibuat'], ';');
 
             $query->chunk(500, function ($bookings) use ($out) {
@@ -46,7 +46,8 @@ class BookingController extends Controller
                     fputcsv($out, [
                         $b->order_id,
                         $b->slot?->date,
-                        $b->slot ? substr($b->slot->start_time, 0, 5) . '-' . substr($b->slot->end_time, 0, 5) : '',
+                        $b->slot ? substr($b->slot->start_time, 0, 5) . '-' . $b->end_time : '',
+                        $b->sessions,
                         $b->studio?->name,
                         $b->customer_name,
                         $b->customer_email,
@@ -99,6 +100,7 @@ class BookingController extends Controller
             'notes'          => ['nullable', 'string', 'max:1000'],
             'payment_method' => ['required', 'in:cash,qris'],
             'promo_code'     => ['nullable', 'string', 'max:32'],
+            'sessions'       => ['nullable', 'integer', 'between:1,' . Booking::MAX_SESSIONS],
         ], [
             'customer_phone.regex' => 'Nomor HP tidak valid. Gunakan 8–15 angka, contoh 081234567890.',
         ]);
@@ -106,21 +108,15 @@ class BookingController extends Controller
         try {
             $booking = DB::transaction(function () use ($data) {
 
-                $slot = Slot::where('id', $data['slot_id'])
-                            ->where('status', 'available')
-                            ->lockForUpdate()
-                            ->firstOrFail();
+                abort_if(Slot::whereKey($data['slot_id'])->value('date') < now()->toDateString(), 422, 'Tanggal slot sudah lewat.');
 
-                abort_if($slot->date < now()->toDateString(), 422, 'Tanggal slot sudah lewat.');
-                abort_if($slot->studio_id != $data['studio_id'], 422, 'Slot bukan milik studio ini.');
-
-                $slot->update(['status' => 'locked', 'locked_until' => now()->addMinutes(30)]);
-
-                // Any pending booking still on this slot let its lock lapse — retire it so it can't be confirmed later
-                Booking::where('slot_id', $slot->id)->where('status', 'pending')->update(['status' => 'expired']);
+                // Walk-ins may start a slot that is already running today
+                $sessions = (int) ($data['sessions'] ?? 1);
+                $slots    = SlotBooker::take((int) $data['studio_id'], (int) $data['slot_id'], $sessions, 'locked', 30, allowStarted: true);
+                $slot     = $slots->first();
 
                 $studio  = Studio::findOrFail($data['studio_id']);
-                $quote   = Pricing::quote($studio, $slot, $data['promo_code'] ?? null);
+                $quote   = Pricing::quote($studio, $slot, $data['promo_code'] ?? null, $sessions);
                 abort_if($quote['promo_error'], 422, (string) $quote['promo_error']);
 
                 $orderId = 'WALKIN-' . strtoupper(Str::random(6)) . '-' . time();
@@ -128,6 +124,7 @@ class BookingController extends Controller
                 $booking = Booking::create([
                     'studio_id'       => $studio->id,
                     'slot_id'         => $slot->id,
+                    'sessions'        => $sessions,
                     'promo_code_id'   => $quote['promo']?->id,
                     'discount_amount' => $quote['discount'],
                     'order_id'       => $orderId,
@@ -138,6 +135,7 @@ class BookingController extends Controller
                     'notes'          => $data['notes'] ?? null,
                     'expires_at'     => now()->addMinutes(30),
                 ]);
+                SlotBooker::attach($booking, $slots);
 
                 Payment::create([
                     'booking_id' => $booking->id,
@@ -154,7 +152,7 @@ class BookingController extends Controller
             if ($data['payment_method'] === 'cash') {
                 DB::transaction(function () use ($booking) {
                     $booking->update(['status' => 'confirmed', 'confirmed_at' => now()]);
-                    $booking->slot->update(['status' => 'booked', 'locked_until' => null]);
+                    $booking->bookSlots();
                     $booking->payment()->update(['status' => 'paid', 'paid_at' => now(), 'method' => 'cash']);
                     $booking->sendConfirmation();
                 });
@@ -208,7 +206,7 @@ class BookingController extends Controller
 
         $needsRefund = DB::transaction(function () use ($booking) {
             $booking->update(['status' => 'cancelled']);
-            $booking->releaseSlot();
+            $booking->releaseSlots();
 
             // The customer already paid — track the money until it's returned
             $paid = $booking->payment && $booking->payment->status === 'paid' && $booking->payment->amount > 0;
@@ -239,7 +237,7 @@ class BookingController extends Controller
 
         DB::transaction(function () use ($booking) {
             $booking->update(['status' => 'confirmed', 'confirmed_at' => now()]);
-            $booking->slot->update(['status' => 'booked', 'locked_until' => null]);
+            $booking->bookSlots();
             $booking->payment()->update(['status' => 'paid', 'paid_at' => now()]);
             $booking->sendConfirmation();
         });

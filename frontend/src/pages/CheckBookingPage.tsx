@@ -8,6 +8,7 @@ import api from '@/lib/axios'
 import { formatIDR } from '@/lib/utils'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import DateTimeStep from '@/components/booking/DateTimeStep'
+import { durationLabel } from '@/lib/sessions'
 
 interface LookupResult {
   order_id: string
@@ -18,6 +19,7 @@ interface LookupResult {
   date: string | null
   start_time: string | null
   end_time: string | null
+  sessions: number
   amount: number | null
   payment_status: string | null
   rescheduled: boolean
@@ -82,6 +84,7 @@ export default function CheckBookingPage() {
           {picking && booking ? (
             <DateTimeStep
               studioId={booking.studio_id}
+              fixedSessions={booking.sessions}
               onBack={() => setPicking(false)}
               onNext={({ slot_id }) => reschedule(slot_id)}
             />
@@ -113,6 +116,7 @@ export default function CheckBookingPage() {
                       ['Studio',   booking.studio],
                       ['Tanggal',  booking.date && format(parseISO(booking.date), 'EEEE, d MMMM yyyy', { locale: idLocale })],
                       ['Jam',      booking.start_time && `${booking.start_time} – ${booking.end_time} WIB`],
+                      ['Durasi',   durationLabel(booking.sessions ?? 1)],
                       ['Total',    booking.amount != null ? formatIDR(booking.amount) : null],
                       ['Order ID', booking.order_id],
                     ].map(([label, value]) => value && (

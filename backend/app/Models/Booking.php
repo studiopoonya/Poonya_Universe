@@ -9,14 +9,20 @@ use Illuminate\Support\Facades\{DB, Notification};
 class Booking extends Model
 {
     protected $fillable = [
-        'user_id', 'studio_id', 'slot_id', 'promo_code_id', 'discount_amount', 'reschedule_count', 'order_id', 'status',
+        'user_id', 'studio_id', 'slot_id', 'sessions', 'promo_code_id', 'discount_amount', 'reschedule_count', 'order_id', 'status',
         'customer_name', 'customer_email', 'customer_phone',
         'notes', 'expires_at', 'confirmed_at',
     ];
 
+    /** Max consecutive 30-minute sessions in one booking (4 = 2 hours). */
+    public const MAX_SESSIONS = 4;
+
+    protected $appends = ['end_time'];
+
     protected function casts(): array
     {
         return [
+            'sessions'     => 'integer',
             'expires_at'   => 'datetime',
             'confirmed_at' => 'datetime',
         ];
@@ -32,9 +38,44 @@ class Booking extends Model
         return $this->belongsTo(Studio::class);
     }
 
+    /** First slot of the booking (date + start time). */
     public function slot()
     {
         return $this->belongsTo(Slot::class);
+    }
+
+    /** Every slot this booking holds — consecutive, same studio and day. */
+    public function slots()
+    {
+        return $this->belongsToMany(Slot::class, 'booking_slot')->orderBy('start_time');
+    }
+
+    /** End of the last session, "HH:MM" — slots are consecutive, so first start + n × 30 min. */
+    public function getEndTimeAttribute(): ?string
+    {
+        if (! $this->slot) return null;
+
+        return \Carbon\Carbon::parse($this->slot->start_time)
+            ->addMinutes(\App\Services\SlotGenerator::SLOT_MINUTES * max(1, (int) $this->sessions))
+            ->format('H:i');
+    }
+
+    public function timeRange(): string
+    {
+        return substr($this->slot->start_time, 0, 5) . ' – ' . $this->end_time;
+    }
+
+    private function slotIds(): array
+    {
+        $ids = DB::table('booking_slot')->where('booking_id', $this->id)->pluck('slot_id')->all();
+
+        return $ids ?: array_filter([$this->slot_id]);
+    }
+
+    /** Mark every held slot as booked (payment done). */
+    public function bookSlots(): void
+    {
+        Slot::whereIn('id', $this->slotIds())->update(['status' => 'booked', 'locked_until' => null]);
     }
 
     public function payment()
@@ -52,7 +93,7 @@ class Booking extends Model
     {
         DB::transaction(function () {
             $this->update(['status' => 'confirmed', 'confirmed_at' => now()]);
-            $this->slot()->update(['status' => 'booked', 'locked_until' => null]);
+            $this->bookSlots();
             $this->payment()->update(['gateway' => 'cash', 'method' => 'promo', 'status' => 'paid', 'paid_at' => now()]);
             $this->sendConfirmation();
         });
@@ -64,7 +105,7 @@ class Booking extends Model
         DB::transaction(function () {
             $this->update(['status' => 'cancelled']);
             $this->payment()->update(['status' => 'failed']);
-            $this->releaseSlot();
+            $this->releaseSlots();
         });
     }
 
@@ -81,7 +122,7 @@ class Booking extends Model
                 if (! $booking) return;
 
                 $booking->update(['status' => 'expired']);
-                $booking->releaseSlot();
+                $booking->releaseSlots();
             }));
     }
 
@@ -108,18 +149,21 @@ class Booking extends Model
     }
 
     /**
-     * Free this booking's slot — unless another active booking has taken it since
+     * Free this booking's slots — except any another active booking has taken since
      * (e.g. the lock lapsed and someone else booked before this one was expired).
      */
-    public function releaseSlot(): void
+    public function releaseSlots(): void
     {
-        $takenByOther = static::where('slot_id', $this->slot_id)
-            ->where('id', '!=', $this->id)
-            ->whereIn('status', ['pending', 'confirmed'])
-            ->exists();
+        $ids = $this->slotIds();
 
-        if ($takenByOther) return;
+        $takenByOthers = DB::table('booking_slot')
+            ->join('bookings', 'bookings.id', '=', 'booking_slot.booking_id')
+            ->whereIn('booking_slot.slot_id', $ids)
+            ->where('bookings.id', '!=', $this->id)
+            ->whereIn('bookings.status', ['pending', 'confirmed'])
+            ->pluck('booking_slot.slot_id')
+            ->all();
 
-        $this->slot()->update(['status' => 'available', 'locked_until' => null]);
+        Slot::whereIn('id', array_diff($ids, $takenByOthers))->update(['status' => 'available', 'locked_until' => null]);
     }
 }

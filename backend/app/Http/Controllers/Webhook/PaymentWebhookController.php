@@ -97,11 +97,11 @@ class PaymentWebhookController extends Controller
 
             if ($isPaid) {
                 $booking->update(['status' => 'confirmed', 'confirmed_at' => now()]);
-                $booking->slot()->update(['status' => 'booked', 'locked_until' => null]);
+                $booking->bookSlots();
                 $booking->sendConfirmation();
             } else {
                 $booking->update(['status' => strtolower($gatewayStatus) === 'expire' ? 'expired' : 'cancelled']);
-                $booking->releaseSlot();
+                $booking->releaseSlots();
             }
         });
     }

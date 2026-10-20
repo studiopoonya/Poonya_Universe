@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\{Booking, Slot};
-use App\Services\Pricing;
+use App\Services\{Pricing, SlotBooker};
 use Illuminate\Http\{JsonResponse, Request};
 use Illuminate\Support\Facades\DB;
 
@@ -30,23 +30,29 @@ class ManageBookingController extends Controller
             $booking = Booking::with('slot', 'studio', 'payment')->lockForUpdate()->findOrFail($booking->id);
             abort_if($reason = $booking->rescheduleBlockedReason(), 422, (string) $reason);
 
-            $new = Slot::where('id', $request->slot_id)->lockForUpdate()->firstOrFail();
+            $new = Slot::findOrFail($request->slot_id);
             abort_if($new->id === $booking->slot_id, 422, 'Itu jadwal kamu yang sekarang.');
             abort_if($new->studio_id !== $booking->studio_id, 422, 'Ubah jadwal hanya bisa di studio yang sama.');
-            abort_if($new->status !== 'available' || $new->hasStarted(), 409, 'Slot ini sudah tidak tersedia. Pilih waktu lain.');
 
             // Paid price must match (e.g. weekday → weekend costs more); the admin handles those by hand
             $paidBase = $booking->payment->amount + $booking->discount_amount;
             abort_if(
-                Pricing::quote($booking->studio, $new)['base_price'] !== $paidBase,
+                Pricing::quote($booking->studio, $new, null, $booking->sessions)['base_price'] !== $paidBase,
                 422,
                 'Harga di jadwal itu berbeda (weekday/weekend). Pilih jadwal dengan harga yang sama atau hubungi admin.'
             );
 
-            $old = $booking->slot;
-            $new->update(['status' => 'booked', 'locked_until' => null]);
+            // Free the old run first so the new one may overlap it (e.g. shift by 30 min);
+            // if the new run can't be taken, the transaction rolls this back
+            $booking->releaseSlots();
+            try {
+                $slots = SlotBooker::take($booking->studio_id, $new->id, $booking->sessions, 'booked');
+            } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+                abort(409, 'Slot ini sudah tidak tersedia. Pilih waktu lain.');
+            }
+
+            SlotBooker::attach($booking, $slots);
             $booking->update(['slot_id' => $new->id, 'reschedule_count' => $booking->reschedule_count + 1]);
-            $old->update(['status' => 'available', 'locked_until' => null]);
 
             $booking->sendConfirmation(rescheduled: true);
 
@@ -84,7 +90,8 @@ class ManageBookingController extends Controller
             'studio'           => $b->studio?->name,
             'date'             => $b->slot?->date,
             'start_time'       => $b->slot ? substr($b->slot->start_time, 0, 5) : null,
-            'end_time'         => $b->slot ? substr($b->slot->end_time, 0, 5) : null,
+            'end_time'         => $b->end_time,
+            'sessions'         => $b->sessions,
             'amount'           => $b->payment?->amount,
             'payment_status'   => $b->payment?->status,
             'rescheduled'      => $b->reschedule_count > 0,

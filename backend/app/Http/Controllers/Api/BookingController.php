@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreBookingRequest;
 use App\Jobs\ExpireBooking;
 use App\Models\{Booking, Payment, Slot, Studio};
-use App\Services\{PaymentGatewayService, Pricing};
+use App\Services\{PaymentGatewayService, Pricing, SlotBooker};
 use Illuminate\Http\{JsonResponse, Request};
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -21,22 +21,12 @@ class BookingController extends Controller
             $data    = $request->validated();
             $booking = DB::transaction(function () use ($data, $request) {
 
-                $slot = Slot::where('id', $data['slot_id'])
-                            ->where('status', 'available')
-                            ->lockForUpdate()
-                            ->firstOrFail();
-
-                abort_if($slot->hasStarted(), 422, 'Jam slot ini sudah lewat. Silakan pilih waktu lain.');
-
-                abort_if($slot->studio_id != $data['studio_id'], 422, 'Slot bukan milik studio ini.');
-
-                $slot->update(['status' => 'locked', 'locked_until' => now()->addMinutes(15)]);
-
-                // Any pending booking still on this slot let its lock lapse — retire it so it can't be confirmed later
-                Booking::where('slot_id', $slot->id)->where('status', 'pending')->update(['status' => 'expired']);
+                $sessions = (int) ($data['sessions'] ?? 1);
+                $slots    = SlotBooker::take((int) $data['studio_id'], (int) $data['slot_id'], $sessions, 'locked', 15);
+                $slot     = $slots->first();
 
                 $studio  = Studio::findOrFail($data['studio_id']);
-                $quote   = Pricing::quote($studio, $slot, $data['promo_code'] ?? null);
+                $quote   = Pricing::quote($studio, $slot, $data['promo_code'] ?? null, $sessions);
                 abort_if($quote['promo_error'], 422, (string) $quote['promo_error']);
 
                 $orderId = 'ORD-' . strtoupper(Str::random(8)) . '-' . time();
@@ -45,6 +35,7 @@ class BookingController extends Controller
                     'user_id'         => $request->user()?->id,
                     'studio_id'       => $studio->id,
                     'slot_id'         => $slot->id,
+                    'sessions'        => $sessions,
                     'promo_code_id'   => $quote['promo']?->id,
                     'discount_amount' => $quote['discount'],
                     'order_id'        => $orderId,
@@ -55,6 +46,7 @@ class BookingController extends Controller
                     'notes'          => $data['notes'] ?? null,
                     'expires_at'     => now()->addMinutes(15),
                 ]);
+                SlotBooker::attach($booking, $slots);
 
                 Payment::create([
                     'booking_id' => $booking->id,
@@ -114,11 +106,14 @@ class BookingController extends Controller
             'studio_id'  => ['required', 'integer', 'exists:studios,id'],
             'slot_id'    => ['required', 'integer', 'exists:slots,id'],
             'promo_code' => ['nullable', 'string', 'max:32'],
+            'sessions'   => ['nullable', 'integer', 'between:1,' . Booking::MAX_SESSIONS],
         ]);
 
-        $q = Pricing::quote(Studio::findOrFail($data['studio_id']), Slot::findOrFail($data['slot_id']), $data['promo_code'] ?? null);
+        $q = Pricing::quote(Studio::findOrFail($data['studio_id']), Slot::findOrFail($data['slot_id']), $data['promo_code'] ?? null, (int) ($data['sessions'] ?? 1));
 
         return response()->json([
+            'per_session' => $q['per_session'],
+            'sessions'    => $q['sessions'],
             'base_price'  => $q['base_price'],
             'is_weekend'  => $q['is_weekend'],
             'discount'    => $q['discount'],
@@ -151,7 +146,8 @@ class BookingController extends Controller
             'studio'     => $booking->studio?->name,
             'date'       => $booking->slot?->date,
             'start_time' => $booking->slot ? substr($booking->slot->start_time, 0, 5) : null,
-            'end_time'   => $booking->slot ? substr($booking->slot->end_time, 0, 5) : null,
+            'end_time'   => $booking->end_time,
+            'sessions'   => $booking->sessions,
         ]);
     }
 }

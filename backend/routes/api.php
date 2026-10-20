@@ -14,9 +14,9 @@ Route::get('settings', fn () => response()->json(
 
 // Real social proof for the homepage (replaces a hardcoded "200+" claim)
 Route::get('stats', fn () => response()->json([
-    'sessions_this_week' => \App\Models\Booking::where('status', 'confirmed')
+    'sessions_this_week' => (int) \App\Models\Booking::where('status', 'confirmed')
         ->whereHas('slot', fn ($q) => $q->whereBetween('date', [now()->startOfWeek()->toDateString(), now()->endOfWeek()->toDateString()]))
-        ->count(),
+        ->sum('sessions'),
 ]));
 
 Route::get('studios',          [StudioController::class, 'index']);

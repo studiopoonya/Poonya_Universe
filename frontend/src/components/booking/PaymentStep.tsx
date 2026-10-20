@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import api from '@/lib/axios'
 import { openSnap } from '@/lib/snap'
 import { formatIDR } from '@/lib/utils'
+import { durationLabel } from '@/lib/sessions'
 import { useStudios } from '@/hooks/useStudios'
 import { useBookingStatus } from '@/hooks/useBookingStatus'
 import PrimaryButton from '@/components/ui/PrimaryButton'
@@ -14,7 +15,7 @@ import StepActions from '@/components/ui/StepActions'
 import type { BookingPayload, BookingResponse, Quote } from '@/types'
 
 interface Props {
-  booking: Partial<BookingPayload> & { time?: string }
+  booking: Partial<BookingPayload> & { time?: string; sessions?: number }
   onBack: () => void
   /** Start over from date/time selection after the booking expired or failed */
   onRestart: () => void
@@ -40,8 +41,8 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
 
   // Server-side price (weekend price + promo) — the exact amount that will be charged
   const { data: quote, isFetching: quoting } = useQuery<Quote>({
-    queryKey: ['quote', booking.studio_id, booking.slot_id, promoCode],
-    queryFn: () => api.get('/quote', { params: { studio_id: booking.studio_id, slot_id: booking.slot_id, promo_code: promoCode || undefined } }).then((r) => r.data),
+    queryKey: ['quote', booking.studio_id, booking.slot_id, booking.sessions, promoCode],
+    queryFn: () => api.get('/quote', { params: { studio_id: booking.studio_id, slot_id: booking.slot_id, sessions: booking.sessions ?? 1, promo_code: promoCode || undefined } }).then((r) => r.data),
     enabled: !!booking.studio_id && !!booking.slot_id,
   })
 
@@ -128,6 +129,7 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
           />
         )}
         {booking.time && <Row label="Jam" value={`${booking.time} WIB`} />}
+        <Row label="Durasi" value={durationLabel(booking.sessions ?? 1)} />
         <Row label="Nama"    value={(booking as any).customer_name ?? '—'} />
         <Row label="Email"   value={(booking as any).customer_email ?? '—'} />
         <Row label="No. HP"  value={(booking as any).customer_phone ?? '—'} />
@@ -142,7 +144,7 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
               onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
               placeholder="Kode promo (opsional)"
               autoCapitalize="characters"
-              className="flex-1 min-w-0 px-4 py-3 rounded-xl bg-surface-subtle border border-transparent text-base md:text-sm font-semibold text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-brand-500 focus:bg-white uppercase"
+              className="flex-1 min-w-0 px-4 py-3 rounded-xl bg-surface-subtle border border-transparent text-base md:text-sm font-semibold text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-brand-500 focus:bg-white uppercase placeholder:normal-case"
             />
             <button
               type="button"
@@ -164,10 +166,13 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
       )}
 
       <div className="bg-brand-50 border border-brand-100 rounded-2xl px-4 md:px-5 py-4 mb-2 md:mb-6 space-y-1.5">
-        {quote && (quote.discount > 0 || quote.is_weekend) && (
-          <div className="flex items-center justify-between text-sm text-gray-500">
-            <span>Harga{quote.is_weekend ? ' weekend' : ''}</span>
-            <span>{formatIDR(quote.base_price)}</span>
+        {quote && (quote.discount > 0 || quote.is_weekend || quote.sessions > 1) && (
+          <div className="flex items-center justify-between gap-3 text-sm text-gray-500">
+            <span>
+              Harga{quote.is_weekend ? ' weekend' : ''}
+              {quote.sessions > 1 && <span className="text-gray-400"> ({quote.sessions} × {formatIDR(quote.per_session)})</span>}
+            </span>
+            <span className="shrink-0">{formatIDR(quote.base_price)}</span>
           </div>
         )}
         {quote && quote.discount > 0 && (

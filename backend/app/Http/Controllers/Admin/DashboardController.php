@@ -48,7 +48,7 @@ class DashboardController extends Controller
             ->join('studios', 'studios.id', '=', 'bookings.studio_id')
             ->groupBy('studios.id', 'studios.name', 'studios.color')
             ->orderByDesc('total')
-            ->get(['studios.name', 'studios.color', DB::raw('COUNT(*) as sessions'), DB::raw('SUM(payments.amount) as total')])
+            ->get(['studios.name', 'studios.color', DB::raw('SUM(bookings.sessions) as sessions'), DB::raw('SUM(payments.amount) as total')])
             ->map(fn ($r) => ['name' => $r->name, 'color' => $r->color, 'sessions' => (int) $r->sessions, 'total' => (int) $r->total]);
 
         return response()->json([

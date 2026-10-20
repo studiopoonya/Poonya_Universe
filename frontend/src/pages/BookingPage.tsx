@@ -18,7 +18,7 @@ const variants = {
 export default function BookingPage() {
   const [step, setStep]       = useState(0)
   const [dir, setDir]         = useState(1)
-  const [booking, setBooking] = useState<Partial<BookingPayload> & { time?: string }>({})
+  const [booking, setBooking] = useState<Partial<BookingPayload> & { time?: string; sessions?: number }>({})
 
   const go = (next: number) => { setDir(next > step ? 1 : -1); setStep(next) }
   const merge = (data: object) => setBooking((b) => ({ ...b, ...data }))
@@ -41,6 +41,7 @@ export default function BookingPage() {
       studioId={booking.studio_id!}
       initialSlotId={booking.slot_id}
       initialDate={booking.date}
+      initialSessions={booking.sessions}
       onNext={(d) => { merge(d); go(2) }}
       onBack={() => go(0)}
     />,

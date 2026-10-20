@@ -38,7 +38,7 @@ class BookingConfirmed extends Notification implements ShouldQueue
                 : 'Pembayaran berhasil dan booking kamu sudah dikonfirmasi.')
             ->line("**Studio:** {$booking->studio?->name}")
             ->line('**Tanggal:** ' . \Carbon\Carbon::parse($slot->date)->locale('id')->translatedFormat('l, d F Y'))
-            ->line('**Waktu:** ' . substr($slot->start_time, 0, 5) . ' – ' . substr($slot->end_time, 0, 5))
+            ->line('**Waktu:** ' . $booking->timeRange() . ' WIB (' . ($booking->sessions * 30) . ' menit)')
             ->line("**Order ID:** {$booking->order_id}")
             ->action('Cek / Ubah Jadwal', rtrim(config('app.frontend_url'), '/') . '/cek-booking?order_id=' . urlencode($booking->order_id))
             ->line('Ubah jadwal bisa dilakukan sekali, paling lambat 24 jam sebelum sesi.')

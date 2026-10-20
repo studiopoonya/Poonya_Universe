@@ -8,6 +8,7 @@ import api from '@/lib/axios'
 import { openSnap } from '@/lib/snap'
 import { formatIDR } from '@/lib/utils'
 import type { Studio, Slot, Quote } from '@/types'
+import { SESSION_OPTIONS, runFrom, durationLabel } from '@/lib/sessions'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -51,7 +52,7 @@ function Steps({ current }: { current: number }) {
 
 const today = startOfDay(new Date())
 
-function StepSchedule({ onNext }: { onNext: (d: { studio_id: number; slot_id: number; date: string }) => void }) {
+function StepSchedule({ onNext }: { onNext: (d: { studio_id: number; slot_id: number; date: string; sessions: number }) => void }) {
   const { data: studios = [] } = useQuery<Studio[]>({
     queryKey: ['studios'],
     queryFn: () => api.get('/studios').then((r) => r.data),
@@ -61,6 +62,7 @@ function StepSchedule({ onNext }: { onNext: (d: { studio_id: number; slot_id: nu
   const [studioId, setStudioId] = useState<number | null>(null)
   const [date, setDate]         = useState<Date>(today)
   const [slotId, setSlot]       = useState<number | null>(null)
+  const [sessions, setSessions] = useState(1)
 
   const dateStr        = format(date, 'yyyy-MM-dd')
   const selectedStudio = studios.find((s) => s.id === studioId)
@@ -72,7 +74,9 @@ function StepSchedule({ onNext }: { onNext: (d: { studio_id: number; slot_id: nu
   })
 
   const days: Date[] = Array.from({ length: 14 }, (_, i) => addDays(today, i))
-  const canNext = !!studioId && !!slotId
+  const startIdx = slots.findIndex((s) => s.id === slotId)
+  const run      = startIdx >= 0 ? runFrom(slots, startIdx, sessions) : null
+  const canNext  = !!studioId && !!run
 
   return (
     <div className="space-y-6">
@@ -192,8 +196,19 @@ function StepSchedule({ onNext }: { onNext: (d: { studio_id: number; slot_id: nu
       {/* Slots */}
       {studioId && (
         <div>
+          <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-2">Durasi</label>
+          <div className="grid grid-cols-4 gap-2 mb-4">
+            {SESSION_OPTIONS.map((o) => (
+              <button
+                key={o.sessions} type="button" onClick={() => setSessions(o.sessions)}
+                className={`py-2 rounded-xl border-2 border-ink text-xs font-extrabold ${sessions === o.sessions ? 'bg-ink text-white' : 'bg-white text-ink'}`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
           <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-2">
-            Pilih Jam — {format(date, 'EEEE, d MMMM', { locale: idLocale })}
+            Jam Mulai — {format(date, 'EEEE, d MMMM', { locale: idLocale })}
           </label>
           {slotsLoading ? (
             <div className="grid grid-cols-4 gap-2">
@@ -205,23 +220,32 @@ function StepSchedule({ onNext }: { onNext: (d: { studio_id: number; slot_id: nu
             </div>
           ) : (
             <div className="grid grid-cols-4 gap-2">
-              {slots.map((s) => (
-                <button
-                  key={s.id}
-                  disabled={!s.is_available}
-                  onClick={() => setSlot(s.id)}
-                  className={`py-2.5 rounded-xl text-xs font-extrabold border-2 transition-all duration-100 ${
-                    !s.is_available
-                      ? 'bg-gray-50 text-gray-300 line-through border-gray-200 cursor-not-allowed'
-                      : slotId === s.id
+              {slots.map((s, i) => {
+                const canStart = !!runFrom(slots, i, sessions)
+                const isStart  = !!run && s.id === slotId
+                const inRun    = !!run?.some((r) => r.id === s.id)
+                return (
+                  <button
+                    key={s.id}
+                    disabled={!canStart && !inRun}
+                    onClick={() => canStart && setSlot(s.id)}
+                    className={`py-2.5 rounded-xl text-xs font-extrabold border-2 transition-all duration-100 ${
+                      isStart
                         ? 'text-white border-ink shadow-cartoon-sm -translate-x-0.5 -translate-y-0.5'
-                        : 'bg-white text-ink border-ink shadow-cartoon-sm hover:shadow-cartoon hover:-translate-x-0.5 hover:-translate-y-0.5'
-                  }`}
-                  style={slotId === s.id ? { background: selectedStudio?.color } : undefined}
-                >
-                  {s.start_time.slice(0, 5)}
-                </button>
-              ))}
+                        : inRun
+                          ? 'bg-brand-100 text-brand-600 border-brand-500'
+                          : !s.is_available
+                            ? 'bg-gray-50 text-gray-300 line-through border-gray-200 cursor-not-allowed'
+                            : !canStart
+                              ? 'bg-white text-gray-300 border-gray-200 cursor-not-allowed'
+                              : 'bg-white text-ink border-ink shadow-cartoon-sm hover:shadow-cartoon hover:-translate-x-0.5 hover:-translate-y-0.5'
+                    }`}
+                    style={isStart ? { background: selectedStudio?.color } : undefined}
+                  >
+                    {s.start_time.slice(0, 5)}
+                  </button>
+                )
+              })}
             </div>
           )}
         </div>
@@ -230,7 +254,7 @@ function StepSchedule({ onNext }: { onNext: (d: { studio_id: number; slot_id: nu
       <div className="flex justify-center pt-2">
         <button
           disabled={!canNext}
-          onClick={() => canNext && onNext({ studio_id: studioId!, slot_id: slotId!, date: dateStr })}
+          onClick={() => canNext && onNext({ studio_id: studioId!, slot_id: run![0].id, date: dateStr, sessions })}
           className="px-10 py-3 bg-brand-500 text-white text-sm font-extrabold rounded-2xl border-2 border-ink shadow-cartoon hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-cartoon-lg disabled:opacity-30 disabled:cursor-not-allowed disabled:shadow-none active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all duration-100"
         >
           Lanjut →
@@ -436,7 +460,7 @@ function CashModal({
 // ─── step 3: payment ──────────────────────────────────────────────────────────
 
 interface AllData {
-  studio_id: number; slot_id: number; date: string
+  studio_id: number; slot_id: number; date: string; sessions: number
   customer_name: string; customer_email: string; customer_phone: string; notes: string
 }
 
@@ -459,8 +483,8 @@ function StepPayment({
 
   // Same server-side pricing as online booking (weekend price + promo)
   const { data: quote } = useQuery<Quote>({
-    queryKey: ['quote', data.studio_id, data.slot_id, promoCode],
-    queryFn: () => api.get('/quote', { params: { studio_id: data.studio_id, slot_id: data.slot_id, promo_code: promoCode || undefined } }).then((r) => r.data),
+    queryKey: ['quote', data.studio_id, data.slot_id, data.sessions, promoCode],
+    queryFn: () => api.get('/quote', { params: { studio_id: data.studio_id, slot_id: data.slot_id, sessions: data.sessions, promo_code: promoCode || undefined } }).then((r) => r.data),
   })
   const price = quote?.total ?? studio?.price ?? 0
 
@@ -528,6 +552,7 @@ function StepPayment({
           {[
             ['Studio',    studio?.name ?? '—'],
             ['Tanggal',   format(new Date(data.date), 'EEEE, d MMMM yyyy', { locale: idLocale })],
+            ['Durasi',    durationLabel(data.sessions)],
             ['Pelanggan', data.customer_name],
             ['No. HP',    data.customer_phone],
           ].map(([label, value]) => (
@@ -634,7 +659,7 @@ const EMPTY_CUSTOMER = { customer_name: '', customer_email: '', customer_phone: 
 export default function AdminPayment() {
   const qc = useQueryClient()
   const [step,     setStep]     = useState(0)
-  const [schedule, setSchedule] = useState<{ studio_id: number; slot_id: number; date: string } | null>(null)
+  const [schedule, setSchedule] = useState<{ studio_id: number; slot_id: number; date: string; sessions: number } | null>(null)
   const [customer, setCustomer] = useState<typeof EMPTY_CUSTOMER>(EMPTY_CUSTOMER)
   const [key,      setKey]      = useState(0) // reset flow
 

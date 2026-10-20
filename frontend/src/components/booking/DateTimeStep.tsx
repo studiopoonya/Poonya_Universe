@@ -9,29 +9,36 @@ import { useAvailableSlots } from '@/hooks/useAvailableSlots'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import StepActions from '@/components/ui/StepActions'
 import SkeletonCard from '@/components/ui/SkeletonCard'
+import { SESSION_OPTIONS, runFrom, durationLabel } from '@/lib/sessions'
 import type { Slot } from '@/types'
 
 interface Props {
   studioId: number
-  onNext: (data: { slot_id: number; date: string; time: string }) => void
+  onNext: (data: { slot_id: number; date: string; time: string; sessions: number }) => void
   onBack: () => void
   initialSlotId?: number
+  initialSessions?: number
+  /** Duration can't be changed (rescheduling keeps the booked length) */
+  fixedSessions?: number
   /** yyyy-MM-dd of the slot picked earlier, so going back shows that day again */
   initialDate?: string
 }
 
 const today = startOfDay(new Date())
 
-export default function DateTimeStep({ studioId, onNext, onBack, initialSlotId, initialDate }: Props) {
+export default function DateTimeStep({ studioId, onNext, onBack, initialSlotId, initialDate, initialSessions, fixedSessions }: Props) {
   const startDate = initialDate && !isBefore(parseISO(initialDate), today) ? parseISO(initialDate) : today
   const [viewMonth, setViewMonth] = useState<Date>(startOfMonth(startDate))
   const [date, setDate]           = useState<Date>(startDate)
   const [slotId, setSlot]         = useState<number | null>(initialSlotId ?? null)
+  const [sessions, setSessions]   = useState<number>(fixedSessions ?? initialSessions ?? 1)
 
   const dateStr = format(date, 'yyyy-MM-dd')
   const { data: slots = [], isLoading } = useAvailableSlots(studioId, dateStr)
-  // Only a slot visible (and still free) on the shown day counts as picked
-  const selected = slots.find((s: Slot) => s.id === slotId && s.is_available)
+  // The picked start + the following sessions, only if all of them are free and back to back
+  const startIdx = slots.findIndex((s: Slot) => s.id === slotId)
+  const run      = startIdx >= 0 ? runFrom(slots, startIdx, sessions) : null
+  const runIds   = new Set(run?.map((s) => s.id))
 
   const windowStart = isBefore(startOfMonth(viewMonth), today) ? today : startOfMonth(viewMonth)
   const windowEnd   = endOfMonth(viewMonth)
@@ -113,7 +120,33 @@ export default function DateTimeStep({ studioId, onNext, onBack, initialSlotId, 
         <div className="h-px flex-1 bg-ink/10" />
       </div>
 
-      {/* Time slots */}
+      {/* Duration: several 30-minute sessions in a row */}
+      {fixedSessions ? (
+        <p className="text-xs font-bold text-gray-500 mb-3">Durasi: {durationLabel(fixedSessions)} (sesuai booking)</p>
+      ) : (
+        <div className="mb-4">
+          <p className="text-[11px] font-extrabold text-gray-400 uppercase tracking-wider mb-2">Durasi</p>
+          <div className="grid grid-cols-4 gap-2">
+            {SESSION_OPTIONS.map((o) => (
+              <button
+                key={o.sessions}
+                type="button"
+                onClick={() => setSessions(o.sessions)}
+                className={`py-2 rounded-xl border-2 border-ink text-xs font-extrabold transition-all duration-100 ${
+                  sessions === o.sessions ? 'bg-ink text-white shadow-cartoon-sm' : 'bg-white text-ink hover:bg-surface-subtle'
+                }`}
+              >
+                {o.label}
+                <span className={`block text-[10px] font-bold ${sessions === o.sessions ? 'text-white/60' : 'text-gray-400'}`}>
+                  {o.sessions} sesi
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Time slots (pick the start; the next sessions are highlighted) */}
       <AnimatePresence mode="wait">
         <motion.div
           key={dateStr}
@@ -129,37 +162,54 @@ export default function DateTimeStep({ studioId, onNext, onBack, initialSlotId, 
                   <p className="text-sm font-bold text-gray-400">😴 Tidak ada slot tersedia.</p>
                 </div>
               )
-              : slots.map((s: Slot) => (
-                <button
-                  key={s.id}
-                  disabled={!s.is_available}
-                  onClick={() => setSlot(s.id)}
-                  className={`
-                    py-3 md:py-2.5 rounded-xl text-sm font-extrabold transition-all duration-100 border-2
-                    ${!s.is_available
-                      ? 'bg-gray-50 text-gray-300 cursor-not-allowed line-through border-gray-200'
-                      : slotId === s.id
+              : slots.map((s: Slot, i: number) => {
+                const canStart = !!runFrom(slots, i, sessions)
+                const isStart  = run && s.id === slotId
+                const inRun    = runIds.has(s.id)
+                return (
+                  <button
+                    key={s.id}
+                    disabled={!canStart && !inRun}
+                    onClick={() => canStart && setSlot(s.id)}
+                    title={s.is_available && !canStart ? `Tidak cukup slot kosong berurutan untuk ${durationLabel(sessions)}` : undefined}
+                    className={`
+                      py-3 md:py-2.5 rounded-xl text-sm font-extrabold transition-all duration-100 border-2
+                      ${isStart
                         ? 'bg-brand-500 text-white border-ink shadow-cartoon-sm -translate-x-0.5 -translate-y-0.5'
-                        : 'bg-white text-ink border-ink shadow-cartoon-sm hover:shadow-cartoon hover:-translate-x-0.5 hover:-translate-y-0.5'}
-                  `}
-                >
-                  {s.start_time.slice(0, 5)}
-                </button>
-              ))
+                        : inRun
+                          ? 'bg-brand-100 text-brand-600 border-brand-500'
+                          : !s.is_available
+                            ? 'bg-gray-50 text-gray-300 cursor-not-allowed line-through border-gray-200'
+                            : !canStart
+                              ? 'bg-white text-gray-300 cursor-not-allowed border-gray-200'
+                              : 'bg-white text-ink border-ink shadow-cartoon-sm hover:shadow-cartoon hover:-translate-x-0.5 hover:-translate-y-0.5'}
+                    `}
+                  >
+                    {s.start_time.slice(0, 5)}
+                  </button>
+                )
+              })
           }
         </motion.div>
       </AnimatePresence>
+
+      {run && (
+        <p className="text-center text-xs font-extrabold text-brand-600 mt-4">
+          {run[0].start_time.slice(0, 5)} – {run[run.length - 1].end_time.slice(0, 5)} · {durationLabel(sessions)}
+        </p>
+      )}
 
       <StepActions>
         <PrimaryButton variant="ghost" onClick={onBack} className="w-auto px-5">
           ← Kembali
         </PrimaryButton>
         <PrimaryButton
-          disabled={!selected}
-          onClick={() => selected && onNext({
-            slot_id: selected.id,
+          disabled={!run}
+          onClick={() => run && onNext({
+            slot_id: run[0].id,
             date: dateStr,
-            time: `${selected.start_time.slice(0, 5)} – ${selected.end_time.slice(0, 5)}`,
+            time: `${run[0].start_time.slice(0, 5)} – ${run[run.length - 1].end_time.slice(0, 5)}`,
+            sessions,
           })}
         >
           Lanjut →

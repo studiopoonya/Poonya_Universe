@@ -9,7 +9,7 @@ export default function PrimaryButton({
   children, loading, disabled, variant = 'primary', className = '', ...props
 }: Props) {
   const base = `
-    inline-flex items-center justify-center gap-2 font-extrabold text-sm
+    inline-flex items-center justify-center gap-2 font-extrabold text-sm whitespace-nowrap
     transition-all duration-100 py-3.5 px-6 rounded-2xl border-2 border-ink
     disabled:opacity-40 disabled:cursor-not-allowed select-none
   `

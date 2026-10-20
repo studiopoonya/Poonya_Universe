@@ -43,7 +43,7 @@ class ScheduleController extends Controller
             // Slots that were ever booked (or blocked by hand) stay as they are.
             return Slot::where('date', '>', today()->toDateString())
                 ->where('status', 'available')
-                ->whereDoesntHave('booking')
+                ->whereDoesntHave('bookings')
                 ->delete();
         });
 
@@ -61,14 +61,14 @@ class ScheduleController extends Controller
             $closed = ClosedDate::create($data);
 
             // Free slots disappear; locked/booked ones stay so existing customers keep their session
-            Slot::whereDate('date', $data['date'])->where('status', 'available')->whereDoesntHave('booking')->delete();
+            Slot::whereDate('date', $data['date'])->where('status', 'available')->whereDoesntHave('bookings')->delete();
             Slot::whereDate('date', $data['date'])->where('status', 'available')->update(['status' => 'blocked']);
 
             return $closed;
         });
 
         $existing = Booking::whereIn('status', ['pending', 'confirmed'])
-            ->whereHas('slot', fn ($q) => $q->whereDate('date', $data['date']))
+            ->whereHas('slots', fn ($q) => $q->whereDate('date', $data['date']))
             ->count();
 
         return response()->json([
@@ -106,7 +106,7 @@ class ScheduleController extends Controller
         $slots = Slot::where('studio_id', $data['studio_id'])
             ->whereDate('date', $data['date'])
             ->orderBy('start_time')
-            ->with(['bookings' => fn ($q) => $q->whereIn('status', ['pending', 'confirmed'])->select('id', 'slot_id', 'customer_name', 'status')])
+            ->with(['bookings' => fn ($q) => $q->whereIn('status', ['pending', 'confirmed'])->select('bookings.id', 'customer_name', 'status')])
             ->get()
             ->map(fn (Slot $s) => [
                 'id'         => $s->id,
