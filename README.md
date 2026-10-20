@@ -21,7 +21,7 @@ cd backend
 cp .env.example .env          # isi DB_*, lalu MIDTRANS_SERVER_KEY (lihat bagian Midtrans)
 composer install
 php artisan key:generate
-php artisan migrate --seed    # tabel + jam operasional + studio contoh + akun admin
+php artisan migrate --seed    # tabel + jam operasional + studio contoh + akun admin (isi ADMIN_PASSWORD di .env dulu)
 php artisan storage:link      # agar foto studio bisa tampil
 php artisan serve             # http://localhost:8000
 
@@ -32,7 +32,7 @@ npm install
 npm run dev                   # http://localhost:5173 (meneruskan /api dan /storage ke :8000)
 ```
 
-Login admin di `http://localhost:5173/admin/login` dengan akun dari seeder: `admin@selfstudio.id` / `admin123`. **Segera ganti password-nya** di menu Accounts, lalu aktifkan verifikasi 2 langkah di menu **Keamanan Akun**.
+Akun admin pertama dibuat oleh seeder dari `ADMIN_EMAIL` / `ADMIN_PASSWORD` di `.env` (password wajib diisi, tidak disimpan di repo). Login di `http://localhost:5173/admin/login`, lalu aktifkan verifikasi 2 langkah di menu **Keamanan Akun**.
 
 Slot booking dibuat otomatis dari jam operasional, jadi tidak perlu dibuat manual.
 

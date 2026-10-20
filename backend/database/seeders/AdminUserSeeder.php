@@ -2,24 +2,30 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use RuntimeException;
 
 class AdminUserSeeder extends Seeder
 {
     /**
-     * Run the database seeds.
+     * First admin account. The password comes from .env (ADMIN_PASSWORD) so it is
+     * never committed to the repository.
      */
     public function run(): void
     {
+        $email    = env('ADMIN_EMAIL', 'studiopoonya@gmail.com');
+        $password = env('ADMIN_PASSWORD');
+
+        if (! $password || strlen($password) < 8) {
+            throw new RuntimeException('Set ADMIN_PASSWORD (min. 8 karakter) di .env sebelum menjalankan seeder.');
+        }
+
         \App\Models\User::updateOrCreate(
-            ['email' => 'admin@selfstudio.id'],
+            ['email' => $email],
             [
-                'name'     => 'Studio Admin',
-                'email'    => 'admin@selfstudio.id',
-                'password' => \Illuminate\Support\Facades\Hash::make('admin123'),
+                'name'     => 'Poonya Studio',
+                'password' => \Illuminate\Support\Facades\Hash::make($password),
                 'role'     => 'admin',
-                'phone'    => '08123456789',
             ]
         );
     }
