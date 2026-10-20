@@ -156,7 +156,22 @@ function SlotBlockCard() {
 
   return (
     <div className={card}>
-      <SectionTitle icon={<Lock className="w-5 h-5" strokeWidth={2.5} />} title="Blokir Slot" desc="Tutup jam tertentu saja tanpa menutup seharian — misalnya sesi privat, istirahat staff, perawatan alat, atau jadwal yang sudah dipesan lewat WhatsApp. Klik slot untuk blokir / buka lagi." />
+      <SectionTitle icon={<Lock className="w-5 h-5" strokeWidth={2.5} />} title="Blokir Slot" desc="Tutup jam tertentu supaya tidak bisa dibooking customer." />
+
+      {/* What blocking is for — admins asked */}
+      <div className="rounded-2xl bg-brand-50 border-2 border-brand-100 p-4 mb-4 text-xs font-semibold text-gray-600 leading-relaxed">
+        <p className="font-extrabold text-ink mb-1.5">Kapan dipakai?</p>
+        <ul className="space-y-1">
+          <li>🎬 <strong>Sesi privat / acara</strong> — studio dipakai sendiri, foto produk, kolaborasi.</li>
+          <li>📞 <strong>Booking di luar aplikasi</strong> — sudah dijanjikan lewat WhatsApp / telepon, supaya tidak diambil orang lain.</li>
+          <li>☕ <strong>Istirahat staff</strong> — misalnya jam makan siang.</li>
+          <li>🔧 <strong>Perawatan</strong> — ganti backdrop, lampu rusak, bersih-bersih.</li>
+        </ul>
+        <p className="mt-2.5 pt-2.5 border-t border-brand-100">
+          Bedanya dengan <strong>Hari Libur</strong>: hari libur menutup <strong>seharian penuh</strong>, blokir slot menutup <strong>jam tertentu saja</strong>.
+          Slot yang sudah dibooking tidak bisa diblokir.
+        </p>
+      </div>
       <div className="flex flex-wrap gap-2 mb-4">
         <select value={activeStudio ?? ''} onChange={(e) => setStudioId(Number(e.target.value))} className={inputCls}>
           {studios.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}

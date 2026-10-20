@@ -11,7 +11,6 @@ import LoginPage      from '@/pages/LoginPage'
 import AdminDashboard from '@/pages/admin/AdminDashboard'
 import AdminStudios   from '@/pages/admin/AdminStudios'
 import AdminBookings  from '@/pages/admin/AdminBookings'
-import AdminPayment   from '@/pages/admin/AdminPayment'
 import AdminSettings  from '@/pages/admin/AdminSettings'
 import AdminAccounts  from '@/pages/admin/AdminAccounts'
 import AdminEmail     from '@/pages/admin/AdminEmail'
@@ -62,7 +61,6 @@ export default function App() {
             <Route index                element={<AdminDashboard />} />
             <Route path="bookings"      element={<AdminBookings />} />
             <Route path="studios"       element={<AdminStudios />} />
-            <Route path="payment"       element={<AdminPayment />} />
             <Route path="settings"      element={<AdminSettings />} />
             <Route path="accounts"      element={<AdminAccounts />} />
             <Route path="email"         element={<AdminEmail />} />

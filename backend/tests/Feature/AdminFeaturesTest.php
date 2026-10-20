@@ -53,20 +53,6 @@ class AdminFeaturesTest extends TestCase
         $this->assertStringContainsString('attachment', $res->headers->get('content-disposition'));
     }
 
-    public function test_walk_in_cash_booking_uses_pricing_and_confirms(): void
-    {
-        $studio = $this->studio(['price' => 80000]);
-        PromoCode::create(['code' => 'WALK', 'type' => 'fixed', 'value' => 5000, 'is_active' => true]);
-        $slot = $this->slot($studio);
-
-        $this->asUser($this->staff(['payment']))
-            ->postJson('/api/admin/bookings', $this->bookingPayload($slot, ['payment_method' => 'cash', 'promo_code' => 'WALK']))
-            ->assertCreated()->assertJson(['status' => 'confirmed']);
-
-        $this->assertSame(75000, Payment::first()->amount);
-        $this->assertSame('booked', $slot->fresh()->status);
-    }
-
     public function test_promo_code_crud(): void
     {
         $admin = $this->admin();

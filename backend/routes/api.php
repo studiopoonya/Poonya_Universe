@@ -64,9 +64,6 @@ Route::middleware(['auth:sanctum', 'admin'])
             Route::patch('bookings/{booking}/refunded', [Admin\BookingController::class, 'markRefunded']);
         });
 
-        // Walk-in booking is made from the Payment page
-        Route::post('bookings', [Admin\BookingController::class, 'store'])->middleware('permission:payment');
-
         Route::middleware('permission:studios')->group(function () {
             Route::apiResource('studios', Admin\StudioController::class)->except(['show']);
 

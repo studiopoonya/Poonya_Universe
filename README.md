@@ -152,6 +152,8 @@ Tanpa Notification URL, pembayaran tidak akan terkonfirmasi otomatis dan booking
 
 ## Fitur
 
+**Walk-in:** customer yang datang langsung tetap booking lewat aplikasi dan memilih **Bayar di Studio**; admin menekan **Sudah Bayar** dan mengisi uang yang diterima (kembalian dihitung otomatis).
+
 **Customer:** booking dengan alur yang nyaman di HP, harga weekend, kode promo, pembayaran Midtrans, email konfirmasi, serta halaman **Cek Booking** (lihat status dan ubah jadwal 1×, paling lambat 24 jam sebelum sesi).
 
 **Admin:**
@@ -161,8 +163,7 @@ Tanpa Notification URL, pembayaran tidak akan terkonfirmasi otomatis dan booking
 | Dashboard | Pendapatan per bulan dan per studio, sesi hari ini, peringatan refund, export Excel |
 | Bookings | Daftar dan filter booking, konfirmasi, batal, filter **Perlu Refund** → tandai sudah di-refund, export Excel |
 | Studio | Data studio, harga weekday/weekend, foto |
-| Jadwal | Jam operasional, hari libur, blokir slot |
-| Payment | Booking walk-in (cash atau QRIS) |
+| Jadwal | Jam operasional, hari libur, blokir slot (tutup jam tertentu: sesi privat, istirahat, perawatan) |
 | Promo | Kode promo persen atau potongan, dengan kuota dan masa berlaku |
 | Accounts | Akun admin/staff dan hak akses per menu, reset 2FA |
 | Email | Akun email pengirim (SMTP) dan tombol kirim tes |

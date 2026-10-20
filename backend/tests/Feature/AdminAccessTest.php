@@ -27,7 +27,6 @@ class AdminAccessTest extends TestCase
         $this->asUser($staff)->getJson('/api/admin/studios')->assertForbidden();
         $this->asUser($staff)->getJson('/api/admin/schedule')->assertForbidden();
         $this->asUser($staff)->getJson('/api/admin/promo-codes')->assertForbidden();
-        $this->asUser($staff)->postJson('/api/admin/bookings', [])->assertForbidden(); // walk-in = payment
         $this->asUser($staff)->getJson('/api/admin/settings')->assertForbidden();
         $this->asUser($staff)->getJson('/api/admin/mail-settings')->assertForbidden();
         $this->asUser($staff)->getJson('/api/admin/accounts')->assertForbidden();

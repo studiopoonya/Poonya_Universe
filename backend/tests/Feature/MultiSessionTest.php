@@ -78,18 +78,6 @@ class MultiSessionTest extends TestCase
         $this->assertSame(['available', 'booked', 'booked', 'available'], $slots->map(fn ($s) => $s->fresh()->status)->all());
     }
 
-    public function test_walk_in_supports_sessions(): void
-    {
-        [, $slots] = $this->run4(['price' => 40000]);
-
-        $this->asUser($this->staff(['payment']))
-            ->postJson('/api/admin/bookings', $this->bookingPayload($slots[0], ['payment_method' => 'cash', 'sessions' => 3]))
-            ->assertCreated();
-
-        $this->assertSame(120000, Booking::first()->payment->amount);
-        $this->assertSame(['booked', 'booked', 'booked', 'available'], $slots->map(fn ($s) => $s->fresh()->status)->all());
-    }
-
     public function test_admin_slot_grid_shows_the_customer_on_every_held_slot(): void
     {
         [$studio, $slots] = $this->run4();

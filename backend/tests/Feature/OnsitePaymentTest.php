@@ -145,16 +145,4 @@ class OnsitePaymentTest extends TestCase
         $this->assertSame(['Duluan', 'Nanti'], array_column($list, 'customer_name'));
         $this->assertSame(50000, $list[0]['payment']['amount']);
     }
-
-    public function test_walk_in_cash_records_change(): void
-    {
-        $slot = $this->slot($this->studio(['price' => 70000]));
-
-        $this->asUser($this->staff(['payment']))
-            ->postJson('/api/admin/bookings', $this->bookingPayload($slot, ['payment_method' => 'cash', 'cash_received' => 100000]))
-            ->assertCreated();
-
-        $p = Booking::first()->payment;
-        $this->assertSame([100000, 30000], [$p->cash_received, $p->cash_change]);
-    }
 }
