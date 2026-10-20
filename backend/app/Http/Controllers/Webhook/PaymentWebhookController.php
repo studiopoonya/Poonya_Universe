@@ -56,10 +56,15 @@ class PaymentWebhookController extends Controller
             // Idempotency guard: booking already settled one way or the other
             if ($booking->status !== 'pending') {
                 if ($outcome === 'paid') {
-                    // Money arrived after the booking expired/was cancelled — keep a record so admin can refund
+                    // A repeat notification for an already-confirmed booking needs nothing
+                    if ($booking->status === 'confirmed') return;
+
+                    // Money arrived after the booking expired/was cancelled — flag it for a refund
                     $booking->payment()->update([
                         'gateway_ref'     => $gatewayRef,
                         'method'          => $method,
+                        'status'          => 'refund_pending',
+                        'paid_at'         => now(),
                         'gateway_payload' => $rawPayload,
                     ]);
                     Log::warning('Midtrans payment received for non-pending booking', [

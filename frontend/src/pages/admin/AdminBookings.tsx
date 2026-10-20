@@ -1,12 +1,13 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { id as idLocale } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, CheckCircle, XCircle } from 'lucide-react'
+import { Search, X, CheckCircle, XCircle, Download } from 'lucide-react'
 import toast from 'react-hot-toast'
 import api from '@/lib/axios'
-import { formatIDR } from '@/lib/utils'
+import { formatIDR, downloadFile } from '@/lib/utils'
 import type { Booking } from '@/types'
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -55,10 +56,10 @@ function ActionModal({
       isCancel
         ? api.patch(`/admin/bookings/${booking.id}/cancel`)
         : api.patch(`/admin/bookings/${booking.id}/confirm`),
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['admin', 'bookings'] })
       qc.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
-      toast.success(isCancel ? 'Booking dibatalkan.' : 'Booking dikonfirmasi.')
+      toast.success(res.data?.message ?? (isCancel ? 'Booking dibatalkan.' : 'Booking dikonfirmasi.'))
       onClose()
     },
     onError: (err: any) => toast.error(err.response?.data?.message ?? 'Terjadi kesalahan.'),
@@ -117,14 +118,27 @@ const STATUS_OPTIONS = [
   { value: 'confirmed', label: 'Dikonfirmasi'  },
   { value: 'cancelled', label: 'Dibatalkan'    },
   { value: 'expired',   label: 'Expired'       },
+  { value: 'refund',    label: '💸 Perlu Refund' },
 ]
 
 export default function AdminBookings() {
   const qc = useQueryClient()
 
+  const markRefunded = useMutation({
+    mutationFn: (b: Booking) => api.patch(`/admin/bookings/${b.id}/refunded`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'bookings'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
+      toast.success('Refund dicatat.')
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message ?? 'Terjadi kesalahan.'),
+  })
+
   const [search,       setSearch]       = useState('')
   const [searchInput,  setSearchInput]  = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
+  const [params] = useSearchParams()
+  const [statusFilter, setStatusFilter] = useState(params.get('status') ?? '') // e.g. ?status=refund from the dashboard
+  const [exporting,    setExporting]    = useState(false)
   const [dateFilter,   setDateFilter]   = useState('')
   const [page,         setPage]         = useState(1)
   const [actionTarget, setActionTarget] = useState<{ action: ActionType; booking: Booking } | null>(null)
@@ -162,11 +176,25 @@ export default function AdminBookings() {
   return (
     <div>
       {/* header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-ink">Bookings</h1>
-        <p className="text-sm font-semibold text-gray-400 mt-0.5">
-          {data ? `${data.total} total booking` : 'Memuat…'}
-        </p>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold text-ink">Bookings</h1>
+          <p className="text-sm font-semibold text-gray-400 mt-0.5">
+            {data ? `${data.total} total booking` : 'Memuat…'}
+          </p>
+        </div>
+        <button
+          disabled={exporting}
+          onClick={async () => {
+            setExporting(true)
+            try {
+              await downloadFile('/admin/bookings/export', { search: search || undefined, status: statusFilter || undefined, date: dateFilter || undefined }, 'booking.csv')
+            } catch { toast.error('Gagal export.') } finally { setExporting(false) }
+          }}
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-ink bg-amber-400 text-sm font-extrabold text-ink shadow-cartoon-sm disabled:opacity-50"
+        >
+          <Download className="w-4 h-4" strokeWidth={2.5} /> {exporting ? 'Menyiapkan…' : 'Export Excel'}
+        </button>
       </div>
 
       {/* filters */}
@@ -263,12 +291,28 @@ export default function AdminBookings() {
                 </div>
 
                 {/* status */}
-                <div className="shrink-0">
+                <div className="shrink-0 flex flex-col items-end gap-1">
                   <StatusBadge status={b.status} />
+                  {b.payment?.status === 'refund_pending' && (
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full border-2 bg-orange-50 text-orange-600 border-orange-300">
+                      💸 Perlu refund {formatIDR(b.payment.amount)}
+                    </span>
+                  )}
+                  {b.payment?.status === 'refunded' && (
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full border-2 bg-gray-50 text-gray-400 border-gray-200">Sudah refund</span>
+                  )}
                 </div>
 
                 {/* actions */}
                 <div className="shrink-0 flex gap-2 w-full sm:w-auto justify-end empty:hidden">
+                  {b.payment?.status === 'refund_pending' && (
+                    <button
+                      onClick={() => { if (confirm(`Uang ${formatIDR(b.payment!.amount)} untuk ${b.customer_name} sudah dikembalikan?`)) markRefunded.mutate(b) }}
+                      className="text-xs font-extrabold text-orange-600 border-2 border-orange-300 bg-orange-50 px-2.5 py-1.5 rounded-xl"
+                    >
+                      Sudah Refund
+                    </button>
+                  )}
                   {b.status === 'pending' && (
                     <button
                       onClick={() => setActionTarget({ action: 'confirm', booking: b })}

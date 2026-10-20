@@ -10,6 +10,7 @@ use App\Services\{PaymentGatewayService, Pricing};
 use Illuminate\Http\{JsonResponse, Request};
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class BookingController extends Controller
 {
@@ -19,18 +20,64 @@ class BookingController extends Controller
     {
         Booking::expireStale();
 
-        $bookings = Booking::with(['studio', 'slot', 'payment', 'user'])
+        return response()->json($this->filtered($request)->latest()->paginate(20));
+    }
+
+    /** Same filters as the list, as a CSV that opens directly in Excel (Indonesian locale). */
+    public function export(Request $request): StreamedResponse
+    {
+        $request->validate(['month' => ['nullable', 'date_format:Y-m']]);
+
+        $query = $this->filtered($request)
+            ->when($request->month, fn ($q) => $q->whereHas('slot', fn ($s) => $s->where('date', 'like', "{$request->month}-%")))
+            ->with('promoCode')
+            ->orderByDesc('id');
+
+        $name = 'booking-' . ($request->month ?: now()->format('Y-m-d')) . '.csv';
+
+        return response()->streamDownload(function () use ($query) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM so Excel shows names correctly
+            fputcsv($out, ['Order ID', 'Tanggal Sesi', 'Jam', 'Studio', 'Nama', 'Email', 'No. HP', 'Status Booking',
+                'Kode Promo', 'Diskon', 'Total Bayar', 'Status Bayar', 'Metode', 'Dibuat'], ';');
+
+            $query->chunk(500, function ($bookings) use ($out) {
+                foreach ($bookings as $b) {
+                    fputcsv($out, [
+                        $b->order_id,
+                        $b->slot?->date,
+                        $b->slot ? substr($b->slot->start_time, 0, 5) . '-' . substr($b->slot->end_time, 0, 5) : '',
+                        $b->studio?->name,
+                        $b->customer_name,
+                        $b->customer_email,
+                        // ="..." keeps Excel from dropping the leading 0 / using scientific notation
+                        '="' . $b->customer_phone . '"',
+                        $b->status,
+                        $b->promoCode?->code,
+                        $b->discount_amount,
+                        $b->payment?->amount,
+                        $b->payment?->status,
+                        $b->payment?->method,
+                        $b->created_at?->format('Y-m-d H:i'),
+                    ], ';');
+                }
+            });
+
+            fclose($out);
+        }, $name, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    private function filtered(Request $request)
+    {
+        return Booking::with(['studio', 'slot', 'payment', 'user'])
             ->when($request->search, fn ($q) => $q->where(function ($q) use ($request) {
                 $q->where('customer_name',  'like', "%{$request->search}%")
                   ->orWhere('customer_phone', 'like', "%{$request->search}%")
                   ->orWhere('order_id',      'like', "%{$request->search}%");
             }))
-            ->when($request->status, fn ($q) => $q->where('status', $request->status))
-            ->when($request->date,   fn ($q) => $q->whereHas('slot', fn ($s) => $s->where('date', $request->date)))
-            ->latest()
-            ->paginate(20);
-
-        return response()->json($bookings);
+            ->when($request->status === 'refund', fn ($q) => $q->whereHas('payment', fn ($p) => $p->where('status', 'refund_pending')))
+            ->when($request->status && $request->status !== 'refund', fn ($q) => $q->where('status', $request->status))
+            ->when($request->date,   fn ($q) => $q->whereHas('slot', fn ($s) => $s->where('date', $request->date)));
     }
 
     public function show(Booking $booking): JsonResponse
@@ -157,12 +204,32 @@ class BookingController extends Controller
 
     public function cancel(Booking $booking): JsonResponse
     {
-        abort_if(! in_array($booking->status, ['pending', 'confirmed']), 422, 'Cannot cancel this booking.');
+        abort_if(! in_array($booking->status, ['pending', 'confirmed']), 422, 'Booking ini tidak bisa dibatalkan.');
 
-        $booking->update(['status' => 'cancelled']);
-        $booking->releaseSlot();
+        $needsRefund = DB::transaction(function () use ($booking) {
+            $booking->update(['status' => 'cancelled']);
+            $booking->releaseSlot();
 
-        return response()->json(['message' => 'Booking dibatalkan.']);
+            // The customer already paid — track the money until it's returned
+            $paid = $booking->payment && $booking->payment->status === 'paid' && $booking->payment->amount > 0;
+            if ($paid) $booking->payment()->update(['status' => 'refund_pending']);
+
+            return $paid;
+        });
+
+        return response()->json([
+            'message' => $needsRefund ? 'Booking dibatalkan. Pembayaran ditandai perlu refund.' : 'Booking dibatalkan.',
+        ]);
+    }
+
+    /** Admin returned the money for a refund-pending payment. */
+    public function markRefunded(Booking $booking): JsonResponse
+    {
+        abort_unless($booking->payment?->status === 'refund_pending', 422, 'Booking ini tidak sedang menunggu refund.');
+
+        $booking->payment()->update(['status' => 'refunded']);
+
+        return response()->json(['message' => 'Refund dicatat.']);
     }
 
     /** Manually confirm a pending booking (e.g. after receiving cash). */

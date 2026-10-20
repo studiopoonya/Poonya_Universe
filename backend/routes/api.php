@@ -47,9 +47,11 @@ Route::middleware(['auth:sanctum', 'admin'])
         // Each group matches a page that can be ticked per staff account
         Route::middleware('permission:bookings')->group(function () {
             Route::get('bookings',                    [Admin\BookingController::class, 'index']);
+            Route::get('bookings/export',             [Admin\BookingController::class, 'export']);
             Route::get('bookings/{booking}',          [Admin\BookingController::class, 'show']);
             Route::patch('bookings/{booking}/cancel', [Admin\BookingController::class, 'cancel']);
             Route::patch('bookings/{booking}/confirm',[Admin\BookingController::class, 'confirm']);
+            Route::patch('bookings/{booking}/refunded', [Admin\BookingController::class, 'markRefunded']);
         });
 
         // Walk-in booking is made from the Payment page

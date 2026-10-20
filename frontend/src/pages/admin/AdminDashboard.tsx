@@ -1,19 +1,26 @@
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { format, parseISO } from 'date-fns'
 import { id as idLocale } from 'date-fns/locale'
-import { TrendingUp, CalendarCheck, CheckCircle, Clock } from 'lucide-react'
+import { TrendingUp, CalendarCheck, CheckCircle, Clock, Download } from 'lucide-react'
+import toast from 'react-hot-toast'
 import api from '@/lib/axios'
-import { formatIDR } from '@/lib/utils'
+import { formatIDR, downloadFile } from '@/lib/utils'
 
 interface Stats {
   total_revenue: number
   total_bookings: number
   confirmed_bookings: number
   upcoming_today: number
+  pending_refunds: number
 }
 
 interface RevenueDay { date: string; total: number }
+interface RevenueStudio { name: string; color: string; sessions: number; total: number }
+
+const THIS_MONTH = format(new Date(), 'yyyy-MM')
 
 const STATUS_BADGE: Record<string, { bg: string; text: string; label: string }> = {
   confirmed: { bg: 'bg-green-50',  text: 'text-green-600',  label: 'Dikonfirmasi' },
@@ -46,11 +53,26 @@ function StatCard({ label, value, sub, icon, accent }: StatCardProps) {
 }
 
 export default function AdminDashboard() {
+  const [month, setMonth]         = useState(THIS_MONTH)
+  const [exporting, setExporting] = useState(false)
+  const isThisMonth = month === THIS_MONTH
+
   const { data, isLoading } = useQuery({
-    queryKey: ['admin', 'dashboard'],
-    queryFn:  () => api.get('/admin/dashboard').then((r) => r.data),
+    queryKey: ['admin', 'dashboard', month],
+    queryFn:  () => api.get('/admin/dashboard', { params: { month } }).then((r) => r.data),
     refetchInterval: 30_000,
   })
+
+  const exportMonth = async () => {
+    setExporting(true)
+    try {
+      await downloadFile('/admin/bookings/export', { month }, `booking-${month}.csv`)
+    } catch (err: any) {
+      toast.error(err.response?.status === 403 ? 'Kamu tidak punya akses ke data booking.' : 'Gagal export.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -71,34 +93,65 @@ export default function AdminDashboard() {
   const stats: Stats              = data?.stats           ?? {}
   const recentBookings: any[]     = data?.recent_bookings ?? []
   const revenueByDay: RevenueDay[] = data?.revenue_by_day ?? []
+  const revenueByStudio: RevenueStudio[] = data?.revenue_by_studio ?? []
+  const monthLabel = format(parseISO(`${month}-01`), 'MMMM yyyy', { locale: idLocale })
+  const periodSub  = isThisMonth ? 'bulan ini' : monthLabel
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold text-ink">Dashboard</h1>
-        <p className="text-sm font-semibold text-gray-400 mt-0.5">Ringkasan bulan ini</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold text-ink">Dashboard</h1>
+          <p className="text-sm font-semibold text-gray-400 mt-0.5">Ringkasan {periodSub}</p>
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="month" value={month} max={THIS_MONTH}
+            onChange={(e) => e.target.value && setMonth(e.target.value)}
+            className="px-3 py-2.5 rounded-2xl border-2 border-ink bg-white text-sm font-extrabold text-ink shadow-cartoon-sm"
+          />
+          <button
+            onClick={exportMonth} disabled={exporting}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-ink bg-amber-400 text-sm font-extrabold text-ink shadow-cartoon-sm disabled:opacity-50"
+          >
+            <Download className="w-4 h-4" strokeWidth={2.5} /> {exporting ? 'Menyiapkan…' : 'Export'}
+          </button>
+        </div>
       </div>
+
+      {/* Money waiting to be returned to customers */}
+      {stats.pending_refunds > 0 && (
+        <Link
+          to="/admin/bookings?status=refund"
+          className="flex items-center justify-between gap-3 bg-orange-50 border-2 border-orange-400 rounded-2xl shadow-[3px_3px_0_#fb923c] px-5 py-4"
+        >
+          <p className="text-sm font-extrabold text-orange-700">
+            💸 {stats.pending_refunds} pembayaran perlu di-refund ke customer
+          </p>
+          <span className="text-xs font-extrabold text-orange-600 shrink-0">Lihat →</span>
+        </Link>
+      )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
           label="Pendapatan"
           value={formatIDR(stats.total_revenue ?? 0)}
-          sub="bulan ini"
+          sub={periodSub}
           icon={<TrendingUp className="w-4 h-4 text-white" strokeWidth={2.5} />}
           accent="bg-brand-500"
         />
         <StatCard
           label="Total Booking"
           value={String(stats.total_bookings ?? 0)}
-          sub="bulan ini"
+          sub={periodSub}
           icon={<CalendarCheck className="w-4 h-4 text-white" strokeWidth={2.5} />}
           accent="bg-amber-400"
         />
         <StatCard
           label="Dikonfirmasi"
           value={String(stats.confirmed_bookings ?? 0)}
-          sub="bulan ini"
+          sub={periodSub}
           icon={<CheckCircle className="w-4 h-4 text-white" strokeWidth={2.5} />}
           accent="bg-green-500"
         />
@@ -113,10 +166,10 @@ export default function AdminDashboard() {
 
       {/* Revenue chart */}
       <div className="bg-white rounded-3xl border-2 border-ink shadow-cartoon p-6">
-        <p className="text-sm font-extrabold text-ink mb-4">Pendapatan Harian (Bulan Ini)</p>
+        <p className="text-sm font-extrabold text-ink mb-4">Pendapatan Harian ({monthLabel})</p>
         {revenueByDay.length === 0 ? (
           <div className="h-48 flex items-center justify-center">
-            <p className="text-sm font-bold text-gray-300">Belum ada data pendapatan bulan ini.</p>
+            <p className="text-sm font-bold text-gray-300">Belum ada data pendapatan {periodSub}.</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={200}>
@@ -151,6 +204,30 @@ export default function AdminDashboard() {
           </ResponsiveContainer>
         )}
       </div>
+
+      {/* Revenue per studio */}
+      {revenueByStudio.length > 0 && (
+        <div className="bg-white rounded-3xl border-2 border-ink shadow-cartoon p-6">
+          <p className="text-sm font-extrabold text-ink mb-4">Pendapatan per Studio ({monthLabel})</p>
+          <div className="space-y-3">
+            {revenueByStudio.map((s) => {
+              const pct = Math.round((s.total / Math.max(1, stats.total_revenue)) * 100)
+              return (
+                <div key={s.name}>
+                  <div className="flex items-center justify-between gap-3 text-sm mb-1">
+                    <span className="font-extrabold text-ink truncate">{s.name}</span>
+                    <span className="font-extrabold text-ink shrink-0">{formatIDR(s.total)}</span>
+                  </div>
+                  <div className="h-3 rounded-full bg-surface-subtle border-2 border-ink overflow-hidden">
+                    <div className="h-full" style={{ width: `${pct}%`, background: s.color || '#7C3AED' }} />
+                  </div>
+                  <p className="text-[11px] font-bold text-gray-400 mt-1">{s.sessions} sesi · {pct}%</p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Recent bookings */}
       <div className="bg-white rounded-3xl border-2 border-ink shadow-cartoon overflow-hidden">
