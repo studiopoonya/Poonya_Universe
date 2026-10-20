@@ -23,10 +23,15 @@
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
-        <env name="DB_CONNECTION" value="sqlite"/>
-        <env name="DB_DATABASE" value=":memory:"/>
+        <!-- MySQL is required (some migrations use MySQL-only ALTERs). Separate DB, wiped per run:
+             CREATE DATABASE selfstudio_test; -->
+        <env name="DB_CONNECTION" value="mysql"/>
+        <env name="DB_DATABASE" value="selfstudio_test"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
+        <env name="MIDTRANS_SERVER_KEY" value="SB-Mid-server-test"/>
+        <env name="FRONTEND_URL" value="http://frontend.test"/>
+        <env name="TRUSTED_PROXIES" value=""/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
