@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\SlotGenerator;
 use Illuminate\Console\Command;
 
 class GenerateSlots extends Command
@@ -16,46 +17,15 @@ class GenerateSlots extends Command
 
     public function handle(): void
     {
-        $slotDuration = 30; // minutes per slot
-        $days         = (int) $this->argument('days');
-        $studios      = \App\Models\Studio::where('is_active', true)->get();
-        $opHours      = \App\Models\OperationalHour::where('is_open', true)->get()->keyBy('weekday');
-        $created      = 0;
+        $days = (int) $this->argument('days');
 
-        if ($studios->isEmpty()) {
+        if (! \App\Models\Studio::where('is_active', true)->exists()) {
             $this->error('No active studios found. Run db:seed first.');
             return;
         }
 
-        foreach ($studios as $studio) {
-            for ($i = 0; $i < $days; $i++) {
-                $date   = \Carbon\Carbon::today()->addDays($i);
-                $opHour = $opHours->get($date->dayOfWeek);
+        $created = SlotGenerator::ahead($days);
 
-                if (! $opHour) continue;
-
-                $current = \Carbon\Carbon::parse($date->toDateString() . ' ' . $opHour->open_time);
-                $closeAt = \Carbon\Carbon::parse($date->toDateString() . ' ' . $opHour->close_time);
-
-                while ($current->copy()->addMinutes($slotDuration)->lte($closeAt)) {
-                    \App\Models\Slot::firstOrCreate(
-                        [
-                            'studio_id'  => $studio->id,
-                            'date'       => $date->toDateString(),
-                            'start_time' => $current->toTimeString(),
-                        ],
-                        [
-                            'end_time' => $current->copy()->addMinutes($slotDuration)->toTimeString(),
-                            'status'   => 'available',
-                        ]
-                    );
-                    $created++;
-                    $current->addMinutes($slotDuration);
-                }
-            }
-            $this->line("  Studio [{$studio->name}] done.");
-        }
-
-        $this->info("Done! Generated {$created} slots for {$days} days × {$studios->count()} studios.");
+        $this->info("Done! Created {$created} new slots for the next {$days} days.");
     }
 }

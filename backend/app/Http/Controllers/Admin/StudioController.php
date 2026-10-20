@@ -34,10 +34,7 @@ class StudioController extends Controller
         if (isset($data['name'])) $data['slug'] = Str::slug($data['name']);
 
         if ($request->hasFile('thumbnail')) {
-            if ($studio->thumbnail_url) {
-                $old = 'public/' . ltrim(str_replace('/storage', '', $studio->thumbnail_url), '/');
-                Storage::delete($old);
-            }
+            $this->deleteThumbnail($studio);
             $path = $request->file('thumbnail')->store('studios', 'public');
             $data['thumbnail_url'] = Storage::url($path);
         }
@@ -50,19 +47,25 @@ class StudioController extends Controller
     {
         abort_if($studio->bookings()->exists(), 422, 'Tidak dapat menghapus studio yang memiliki booking.');
 
-        if ($studio->thumbnail_url) {
-            $old = 'public/' . ltrim(str_replace('/storage', '', $studio->thumbnail_url), '/');
-            Storage::delete($old);
-        }
+        $this->deleteThumbnail($studio);
 
         $studio->delete();
         return response()->json(['message' => 'Studio dihapus.']);
     }
 
+    /** Thumbnails live on the 'public' disk; the URL is /storage/<path>. */
+    private function deleteThumbnail(Studio $studio): void
+    {
+        if (! $studio->thumbnail_url) return;
+
+        $path = ltrim(str_replace('/storage/', '', parse_url($studio->thumbnail_url, PHP_URL_PATH) ?? ''), '/');
+        if ($path) Storage::disk('public')->delete($path);
+    }
+
     private function validated(Request $request, bool $partial = false): array
     {
         $sometimes = $partial ? 'sometimes|' : '';
-        return $request->validate([
+        $data = $request->validate([
             'name'        => ["{$sometimes}required", 'string', 'max:100'],
             'description' => ['nullable', 'string'],
             'price'       => ["{$sometimes}required", 'integer', 'min:0'],
@@ -73,5 +76,10 @@ class StudioController extends Controller
             'is_active'   => ['boolean'],
             'sort_order'  => ['integer'],
         ]);
+
+        // The form sends an empty `features` value when every feature was removed
+        if (array_key_exists('features', $data)) $data['features'] ??= [];
+
+        return $data;
     }
 }

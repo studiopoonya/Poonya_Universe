@@ -5,6 +5,7 @@ import { format, addDays, startOfDay, isBefore, startOfMonth, endOfMonth } from 
 import { id as idLocale } from 'date-fns/locale'
 import toast from 'react-hot-toast'
 import api from '@/lib/axios'
+import { openSnap } from '@/lib/snap'
 import { formatIDR } from '@/lib/utils'
 import type { Studio, Slot } from '@/types'
 
@@ -467,22 +468,12 @@ function StepPayment({
       }
 
       // QRIS — open Midtrans Snap
-      const settings = await api.get('/settings').then((r) => r.data)
-      const snapUrl   = settings.midtrans_snap_url   || 'https://app.sandbox.midtrans.com/snap/snap.js'
-      const clientKey = settings.midtrans_client_key || (import.meta.env.VITE_MIDTRANS_CLIENT_KEY ?? '')
-
-      const script = document.createElement('script')
-      script.src = snapUrl
-      script.setAttribute('data-client-key', clientKey)
-      document.head.appendChild(script)
-      script.onload = () => {
-        ;(window as any).snap.pay(res.data.payment_token, {
-          onSuccess:  () => { toast.success('Pembayaran berhasil!'); onDone() },
-          onPending:  () => toast('Pembayaran pending.', { icon: '⏳' }),
-          onError:    () => toast.error('Pembayaran gagal.'),
-          onClose:    () => toast('Snap ditutup.', { icon: '⚠️' }),
-        })
-      }
+      await openSnap(res.data.payment_token!, {
+        onSuccess:  () => { toast.success('Pembayaran berhasil!'); onDone() },
+        onPending:  () => toast('Pembayaran pending.', { icon: '⏳' }),
+        onError:    () => toast.error('Pembayaran gagal.'),
+        onClose:    () => toast('Snap ditutup.', { icon: '⚠️' }),
+      })
     } catch (err: any) {
       const code = err.response?.data?.code
       if (code === 'SLOT_UNAVAILABLE') {

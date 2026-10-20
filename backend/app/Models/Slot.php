@@ -18,6 +18,12 @@ class Slot extends Model
         return $this->hasOne(Booking::class);
     }
 
+    /** True once the slot's start time has passed (app timezone, WIB). */
+    public function hasStarted(): bool
+    {
+        return \Carbon\Carbon::parse($this->date . ' ' . $this->start_time)->lte(now());
+    }
+
     public function scopeAvailable($query)
     {
         return $query->where('status', 'available');

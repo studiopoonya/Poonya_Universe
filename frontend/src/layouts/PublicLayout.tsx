@@ -1,17 +1,21 @@
-import { Link, Outlet } from 'react-router-dom'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import { Camera } from 'lucide-react'
 
 export default function PublicLayout() {
+  // Homepage is a single fixed screen; other pages scroll normally
+  const isHome = useLocation().pathname === '/'
+
   return (
-    <div className="min-h-screen flex flex-col bg-surface-muted">
+    <div className={`${isHome ? 'h-dvh overflow-hidden' : 'min-h-screen'} flex flex-col bg-surface-muted`}>
       <header className="sticky top-0 z-40 bg-white border-b-3 border-ink">
-        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="max-w-5xl mx-auto px-4 h-14 md:h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-brand-500 border-2 border-ink shadow-cartoon-sm flex items-center justify-center">
               <Camera className="w-4 h-4 text-white" strokeWidth={2.5} />
             </div>
-            <span className="font-extrabold text-ink text-lg tracking-tight">Self Studio</span>
+            <span className="font-extrabold text-ink text-lg tracking-tight">Poonya Studio</span>
           </Link>
+          {isHome && (
           <nav className="flex items-center gap-3">
             <Link
               to="/booking"
@@ -20,15 +24,16 @@ export default function PublicLayout() {
               Book Sekarang ✨
             </Link>
           </nav>
+          )}
         </div>
       </header>
 
-      <main className="flex-1">
+      <main className="flex-1 min-h-0">
         <Outlet />
       </main>
 
       <footer className="border-t-3 border-ink bg-white py-6 text-center">
-        <p className="text-sm font-bold text-gray-400">© 2026 Self Photo Studio 📸</p>
+        <p className="text-sm font-bold text-gray-400">© 2026 Poonya Studio 📸</p>
       </footer>
     </div>
   )

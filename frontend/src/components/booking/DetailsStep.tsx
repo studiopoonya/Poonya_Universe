@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import PrimaryButton from '@/components/ui/PrimaryButton'
+import StepActions from '@/components/ui/StepActions'
 
 interface CustomerDetails {
   customer_name: string
@@ -20,7 +21,7 @@ function Field({ label, ...props }: { label: string } & React.InputHTMLAttribute
       <label className="block text-xs font-semibold text-gray-500 mb-1.5">{label}</label>
       <input
         {...props}
-        className="w-full px-4 py-3 rounded-xl bg-surface-subtle border border-transparent text-sm font-medium text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-brand-500 focus:bg-white transition-all"
+        className="w-full px-4 py-3 rounded-xl bg-surface-subtle border border-transparent text-base md:text-sm font-medium text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-brand-500 focus:bg-white transition-all"
       />
     </div>
   )
@@ -42,9 +43,14 @@ export default function DetailsStep({ onNext, onBack, initialValues }: Props) {
 
   const validate = (): boolean => {
     const e: Partial<CustomerDetails> = {}
-    if (! form.customer_name.trim())  e.customer_name  = 'Nama wajib diisi'
-    if (! form.customer_email.trim()) e.customer_email = 'Email wajib diisi'
-    if (! form.customer_phone.trim()) e.customer_phone = 'Nomor HP wajib diisi'
+    // Same rules as the backend (StoreBookingRequest), so mistakes show here, not at payment
+    const email = form.customer_email.trim()
+    const phone = form.customer_phone.replace(/[\s\-.()]/g, '')
+    if (! form.customer_name.trim()) e.customer_name  = 'Nama wajib diisi'
+    if (! email)                     e.customer_email = 'Email wajib diisi'
+    else if (! /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.customer_email = 'Format email tidak valid, contoh: nama@gmail.com'
+    if (! phone)                     e.customer_phone = 'Nomor HP wajib diisi'
+    else if (! /^\+?[0-9]{8,15}$/.test(phone))           e.customer_phone = 'Nomor HP tidak valid. Gunakan 8–15 angka, contoh 081234567890'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -63,6 +69,8 @@ export default function DetailsStep({ onNext, onBack, initialValues }: Props) {
           <Field
             label="Nama Lengkap"
             placeholder="Nama kamu"
+            autoComplete="name"
+            enterKeyHint="next"
             value={form.customer_name}
             onChange={update('customer_name')}
           />
@@ -74,6 +82,9 @@ export default function DetailsStep({ onNext, onBack, initialValues }: Props) {
             label="Email"
             type="email"
             placeholder="email@kamu.com"
+            autoComplete="email"
+            inputMode="email"
+            enterKeyHint="next"
             value={form.customer_email}
             onChange={update('customer_email')}
           />
@@ -85,6 +96,9 @@ export default function DetailsStep({ onNext, onBack, initialValues }: Props) {
             label="Nomor HP / WhatsApp"
             type="tel"
             placeholder="08xxxxxxxxxx"
+            autoComplete="tel"
+            inputMode="tel"
+            enterKeyHint="next"
             value={form.customer_phone}
             onChange={update('customer_phone')}
           />
@@ -98,19 +112,19 @@ export default function DetailsStep({ onNext, onBack, initialValues }: Props) {
             placeholder="Preferensi outfit, tema, dsb."
             value={form.notes}
             onChange={update('notes') as any}
-            className="w-full px-4 py-3 rounded-xl bg-surface-subtle border border-transparent text-sm font-medium text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-brand-500 focus:bg-white transition-all resize-none"
+            className="w-full px-4 py-3 rounded-xl bg-surface-subtle border border-transparent text-base md:text-sm font-medium text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-brand-500 focus:bg-white transition-all resize-none"
           />
         </div>
       </div>
 
-      <div className="flex gap-3 mt-8">
+      <StepActions>
         <PrimaryButton variant="ghost" onClick={onBack} className="w-auto px-5">
           ← Kembali
         </PrimaryButton>
         <PrimaryButton onClick={handleSubmit}>
           Lanjut →
         </PrimaryButton>
-      </div>
+      </StepActions>
     </div>
   )
 }

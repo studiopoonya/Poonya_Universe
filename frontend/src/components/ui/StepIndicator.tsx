@@ -7,6 +7,7 @@ interface Props {
 
 export default function StepIndicator({ steps, current }: Props) {
   return (
+    <div className="flex flex-col items-center">
     <div className="flex items-center gap-1">
       {steps.map((label, i) => {
         const done   = i < current
@@ -42,7 +43,7 @@ export default function StepIndicator({ steps, current }: Props) {
               </span>
             </div>
             {i < steps.length - 1 && (
-              <div className="w-8 md:w-14 h-0.5 mx-2 bg-gray-200 relative overflow-hidden mb-4">
+              <div className="w-6 sm:w-8 md:w-14 h-0.5 mx-1.5 sm:mx-2 bg-gray-200 relative overflow-hidden sm:mb-4">
                 {done && (
                   <motion.div
                     className="absolute inset-y-0 left-0 bg-amber-400"
@@ -55,6 +56,10 @@ export default function StepIndicator({ steps, current }: Props) {
           </div>
         )
       })}
+    </div>
+      <p className="sm:hidden mt-2 text-xs font-extrabold text-brand-500">
+        Langkah {current + 1} dari {steps.length} · {steps[current]}
+      </p>
     </div>
   )
 }

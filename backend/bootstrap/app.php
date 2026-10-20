@@ -16,11 +16,13 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\HandleCors::class,
         ]);
 
-        $middleware->statefulApi();
+        // Auth is Bearer-token only (no cookie sessions), so Sanctum's stateful/CSRF
+        // mode is deliberately off — it rejected same-domain POSTs with 419.
 
         $middleware->alias([
             'admin'      => \App\Http\Middleware\EnsureIsAdmin::class,
             'admin.only' => \App\Http\Middleware\EnsureIsAdminOnly::class,
+            'permission' => \App\Http\Middleware\EnsurePermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

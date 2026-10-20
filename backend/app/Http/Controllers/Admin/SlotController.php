@@ -30,7 +30,9 @@ class SlotController extends Controller
 
     public function block(Slot $slot): JsonResponse
     {
-        abort_if($slot->status === 'booked', 422, 'Cannot block a booked slot.');
+        abort_if($slot->status === 'booked', 422, 'Slot sudah dibooking, tidak bisa diblokir.');
+        // A paid webhook would flip it to booked and silently undo the block
+        abort_if($slot->status === 'locked', 422, 'Slot sedang dalam proses pembayaran. Coba lagi setelah 15 menit.');
 
         $slot->update(['status' => 'blocked']);
 
@@ -39,7 +41,7 @@ class SlotController extends Controller
 
     public function unblock(Slot $slot): JsonResponse
     {
-        abort_if($slot->status !== 'blocked', 422, 'Slot is not blocked.');
+        abort_if($slot->status !== 'blocked', 422, 'Slot tidak sedang diblokir.');
 
         $slot->update(['status' => 'available']);
 

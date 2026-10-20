@@ -16,6 +16,8 @@ const DEFAULTS: MidtransSettings = {
   midtrans_is_production: '0',
 }
 
+type ServerKeyStatus = 'missing' | 'invalid' | 'sandbox' | 'production'
+
 const PROD_SNAP = 'https://app.midtrans.com/snap/snap.js'
 const SBX_SNAP  = 'https://app.sandbox.midtrans.com/snap/snap.js'
 
@@ -30,7 +32,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 export default function AdminSettings() {
-  const { data: saved, isLoading } = useQuery<Partial<MidtransSettings>>({
+  const { data: saved, isLoading } = useQuery<Partial<MidtransSettings> & { server_key_status?: ServerKeyStatus }>({
     queryKey: ['admin', 'settings'],
     queryFn: () => api.get('/admin/settings').then((r) => r.data),
   })
@@ -131,6 +133,29 @@ export default function AdminSettings() {
                 placeholder={isProd ? 'Mid-client-xxxx' : 'SB-Mid-client-xxxx'}
               />
             </Field>
+
+            {/* Server key problems block every payment — make them impossible to miss */}
+            {saved?.server_key_status && (() => {
+              const st = saved.server_key_status
+              const problem =
+                st === 'missing' || st === 'invalid'
+                  ? 'Server key belum diisi atau masih contoh. Semua pembayaran akan gagal ("Pembayaran sedang tidak bisa diproses").'
+                  : st === 'sandbox' && isProd
+                    ? 'Environment Production, tapi server key di .env adalah key Sandbox. Pembayaran akan gagal.'
+                    : st === 'production' && !isProd
+                      ? 'Environment Sandbox, tapi server key di .env adalah key Production. Pembayaran akan gagal.'
+                      : null
+              return problem ? (
+                <div className="bg-rose-50 border-2 border-rose-400 rounded-2xl shadow-[3px_3px_0_#fb7185] px-4 py-3">
+                  <p className="text-xs font-extrabold text-rose-700">⚠️ Pembayaran tidak akan berjalan</p>
+                  <p className="text-xs font-semibold text-rose-600 mt-0.5">{problem}</p>
+                </div>
+              ) : (
+                <div className="bg-green-50 border-2 border-green-400 rounded-2xl px-4 py-3">
+                  <p className="text-xs font-extrabold text-green-700">✓ Server key {st === 'sandbox' ? 'Sandbox' : 'Production'} terpasang</p>
+                </div>
+              )
+            })()}
 
             {/* Server Key info */}
             <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl shadow-[3px_3px_0_#fbbf24] px-4 py-3">

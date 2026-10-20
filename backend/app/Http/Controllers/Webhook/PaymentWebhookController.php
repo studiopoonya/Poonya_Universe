@@ -4,9 +4,8 @@ namespace App\Http\Controllers\Webhook;
 
 use App\Http\Controllers\Controller;
 use App\Models\{Booking, Payment};
-use App\Notifications\BookingConfirmed;
 use Illuminate\Http\{JsonResponse, Request};
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\{DB, Log};
 
 class PaymentWebhookController extends Controller
 {
@@ -52,10 +51,36 @@ class PaymentWebhookController extends Controller
                               ->lockForUpdate()
                               ->firstOrFail();
 
-            // Idempotency guard
-            if (in_array($booking->status, ['confirmed', 'cancelled'])) return;
+            $outcome = $this->resolveOutcome($gatewayStatus, $fraudStatus);
 
-            $isPaid = $this->resolvePaid($gatewayStatus, $fraudStatus);
+            // Idempotency guard: booking already settled one way or the other
+            if ($booking->status !== 'pending') {
+                if ($outcome === 'paid') {
+                    // Money arrived after the booking expired/was cancelled — keep a record so admin can refund
+                    $booking->payment()->update([
+                        'gateway_ref'     => $gatewayRef,
+                        'method'          => $method,
+                        'gateway_payload' => $rawPayload,
+                    ]);
+                    Log::warning('Midtrans payment received for non-pending booking', [
+                        'order_id' => $orderId,
+                        'status'   => $booking->status,
+                    ]);
+                }
+                return;
+            }
+
+            // Still waiting on the customer (e.g. QRIS/VA just issued) — record details, keep the slot locked
+            if ($outcome === 'pending') {
+                $booking->payment()->update([
+                    'gateway_ref'     => $gatewayRef,
+                    'method'          => $method,
+                    'gateway_payload' => $rawPayload,
+                ]);
+                return;
+            }
+
+            $isPaid = $outcome === 'paid';
 
             $booking->payment()->update([
                 'gateway_ref'     => $gatewayRef,
@@ -68,18 +93,29 @@ class PaymentWebhookController extends Controller
             if ($isPaid) {
                 $booking->update(['status' => 'confirmed', 'confirmed_at' => now()]);
                 $booking->slot()->update(['status' => 'booked', 'locked_until' => null]);
-                $booking->user?->notify(new BookingConfirmed($booking));
+                $booking->sendConfirmation();
             } else {
-                $booking->update(['status' => 'cancelled']);
-                $booking->slot()->update(['status' => 'available', 'locked_until' => null]);
+                $booking->update(['status' => strtolower($gatewayStatus) === 'expire' ? 'expired' : 'cancelled']);
+                $booking->releaseSlot();
             }
         });
     }
 
-    private function resolvePaid(string $status, ?string $fraud): bool
+    /**
+     * Map a Midtrans transaction_status to 'paid', 'failed' or 'pending'.
+     * https://docs.midtrans.com/docs/https-notification-webhooks#status-definition
+     */
+    private function resolveOutcome(string $status, ?string $fraud): string
     {
-        if (! in_array(strtolower($status), ['capture', 'settlement', 'paid'])) return false;
-        if ($fraud === 'deny') return false;
-        return true;
+        return match (strtolower($status)) {
+            'settlement'                        => 'paid',
+            'capture'                           => match ($fraud) {
+                'deny'      => 'failed',
+                'challenge' => 'pending', // needs manual review in the Midtrans dashboard
+                default     => 'paid',
+            },
+            'deny', 'cancel', 'expire', 'failure' => 'failed',
+            default                             => 'pending', // pending, authorize, refunds, unknown
+        };
     }
 }

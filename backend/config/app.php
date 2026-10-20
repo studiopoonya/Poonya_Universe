@@ -65,7 +65,11 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => env('APP_TIMEZONE', 'Asia/Jakarta'),
+
+    // Reverse proxies whose X-Forwarded-For we trust: '*' or comma-separated IPs/CIDRs.
+    // Empty = serve directly (default; trusting headers here would let clients spoof IPs).
+    'trusted_proxies' => env('TRUSTED_PROXIES'),
 
     /*
     |--------------------------------------------------------------------------

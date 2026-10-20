@@ -1,0 +1,5 @@
+{
+    "(and :count more error)": "(dan :count kesalahan lainnya)",
+    "(and :count more errors)": "(dan :count kesalahan lainnya)",
+    "Too Many Attempts.": "Terlalu banyak percobaan. Coba lagi sebentar lagi."
+}

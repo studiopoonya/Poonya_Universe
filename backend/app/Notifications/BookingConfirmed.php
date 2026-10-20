@@ -7,14 +7,18 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class BookingConfirmed extends Notification
+/**
+ * Queued and sent only after the surrounding DB transaction commits, so a mail
+ * failure can never roll back a confirmed payment.
+ */
+class BookingConfirmed extends Notification implements ShouldQueue
 {
     use Queueable;
 
-    /**
-     * Create a new notification instance.
-     */
-    public function __construct(private \App\Models\Booking $booking) {}
+    public function __construct(private \App\Models\Booking $booking)
+    {
+        $this->afterCommit();
+    }
 
     public function via(object $notifiable): array
     {
@@ -23,19 +27,17 @@ class BookingConfirmed extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $booking = $this->booking;
+        $booking = $this->booking->loadMissing(['studio', 'slot']);
         $slot    = $booking->slot;
-        $package = $booking->package;
 
         return (new MailMessage)
             ->subject('Booking Dikonfirmasi — ' . config('app.name'))
             ->greeting('Halo, ' . $booking->customer_name . '!')
-            ->line('Pembayaran berhasil dan booking Anda telah dikonfirmasi.')
-            ->line("**Paket:** {$package->name}")
-            ->line("**Tanggal:** " . \Carbon\Carbon::parse($slot->date)->translatedFormat('l, d F Y'))
-            ->line("**Waktu:** {$slot->start_time} – {$slot->end_time}")
+            ->line('Pembayaran berhasil dan booking kamu sudah dikonfirmasi.')
+            ->line("**Studio:** {$booking->studio?->name}")
+            ->line('**Tanggal:** ' . \Carbon\Carbon::parse($slot->date)->locale('id')->translatedFormat('l, d F Y'))
+            ->line('**Waktu:** ' . substr($slot->start_time, 0, 5) . ' – ' . substr($slot->end_time, 0, 5))
             ->line("**Order ID:** {$booking->order_id}")
-            ->action('Lihat Detail', config('app.frontend_url') . '/booking/' . $booking->id)
             ->line('Sampai jumpa di studio!');
     }
 

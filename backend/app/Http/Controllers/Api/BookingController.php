@@ -26,11 +26,14 @@ class BookingController extends Controller
                             ->lockForUpdate()
                             ->firstOrFail();
 
-                abort_if($slot->date < now()->toDateString(), 422, 'Slot date has passed.');
+                abort_if($slot->hasStarted(), 422, 'Jam slot ini sudah lewat. Silakan pilih waktu lain.');
 
                 abort_if($slot->studio_id != $data['studio_id'], 422, 'Slot bukan milik studio ini.');
 
                 $slot->update(['status' => 'locked', 'locked_until' => now()->addMinutes(15)]);
+
+                // Any pending booking still on this slot let its lock lapse — retire it so it can't be confirmed later
+                Booking::where('slot_id', $slot->id)->where('status', 'pending')->update(['status' => 'expired']);
 
                 $studio  = Studio::findOrFail($data['studio_id']);
                 $orderId = 'ORD-' . strtoupper(Str::random(8)) . '-' . time();
@@ -61,7 +64,17 @@ class BookingController extends Controller
 
             ExpireBooking::dispatch($booking)->delay(now()->addMinutes(15));
 
-            $paymentToken = $this->gateway->createTransaction($booking->load('studio'));
+            try {
+                $paymentToken = $this->gateway->createTransaction($booking->load('studio'));
+            } catch (\Throwable $e) {
+                report($e);
+                $booking->cancelUnpaid();
+
+                return response()->json([
+                    'message' => 'Pembayaran sedang tidak bisa diproses. Silakan coba lagi sebentar lagi.',
+                    'code'    => 'PAYMENT_GATEWAY_ERROR',
+                ], 502);
+            }
 
             return response()->json([
                 'booking_id'    => $booking->id,
@@ -80,9 +93,28 @@ class BookingController extends Controller
 
     public function status(Booking $booking): JsonResponse
     {
+        Booking::expireStale();
+        $booking->refresh();
+
         return response()->json([
             'status'       => $booking->status,
             'confirmed_at' => $booking->confirmed_at?->toIso8601String(),
+        ]);
+    }
+
+    /** Booking summary for the payment-finish page Midtrans redirects to. No customer PII. */
+    public function showByOrder(string $orderId): JsonResponse
+    {
+        Booking::expireStale();
+        $booking = Booking::with(['studio', 'slot'])->where('order_id', $orderId)->firstOrFail();
+
+        return response()->json([
+            'order_id'   => $booking->order_id,
+            'status'     => $booking->status,
+            'studio'     => $booking->studio?->name,
+            'date'       => $booking->slot?->date,
+            'start_time' => $booking->slot ? substr($booking->slot->start_time, 0, 5) : null,
+            'end_time'   => $booking->slot ? substr($booking->slot->end_time, 0, 5) : null,
         ]);
     }
 }

@@ -26,7 +26,9 @@ export default function LoginPage() {
       localStorage.setItem('user', JSON.stringify(user))
       navigate('/admin', { replace: true })
     } catch (err: any) {
-      toast.error(err.response?.data?.message ?? 'Login gagal. Periksa email dan password.')
+      toast.error(err.response?.status === 429
+        ? 'Terlalu banyak percobaan login. Tunggu 1 menit lalu coba lagi.'
+        : err.response?.data?.message ?? 'Login gagal. Periksa email dan password.')
     } finally {
       setLoading(false)
     }
@@ -53,7 +55,7 @@ export default function LoginPage() {
             <ShieldCheck className="w-8 h-8 text-white" strokeWidth={2.5} />
           </motion.div>
           <h1 className="text-3xl font-extrabold text-ink">Admin Login</h1>
-          <p className="text-sm font-semibold text-gray-400 mt-1">Self Photo Studio</p>
+          <p className="text-sm font-semibold text-gray-400 mt-1">Poonya Studio</p>
         </div>
 
         <div className="bg-white rounded-3xl border-2 border-ink shadow-cartoon-xl p-8">

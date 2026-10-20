@@ -172,14 +172,14 @@ export default function AdminBookings() {
       {/* filters */}
       <div className="flex flex-wrap gap-3 mb-5">
         {/* search */}
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <div className="relative">
+        <form onSubmit={handleSearch} className="flex gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 sm:flex-none">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" strokeWidth={2.5} />
             <input
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Nama / No. HP / Order ID"
-              className="pl-9 pr-4 py-2.5 rounded-2xl border-2 border-ink text-sm font-semibold text-ink placeholder-gray-300 bg-white shadow-cartoon-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 w-56 transition-all"
+              className="pl-9 pr-4 py-2.5 rounded-2xl border-2 border-ink text-sm font-semibold text-ink placeholder-gray-300 bg-white shadow-cartoon-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 w-full sm:w-56 transition-all"
             />
           </div>
           <button type="submit"
@@ -230,14 +230,14 @@ export default function AdminBookings() {
                 key={b.id}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="px-5 py-4 flex items-center gap-4 hover:bg-surface-muted/50 transition-colors"
+                className="px-4 sm:px-5 py-4 flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 sm:gap-4 hover:bg-surface-muted/50 transition-colors"
               >
                 {/* studio color dot */}
                 <div className="w-3 h-3 rounded-full shrink-0 border-2 border-ink"
                   style={{ background: (b as any).studio?.color ?? '#d1d5db' }} />
 
                 {/* date & time */}
-                <div className="shrink-0 w-28">
+                <div className="shrink-0 w-24 sm:w-28">
                   <p className="text-xs font-extrabold text-ink">
                     {b.slot?.date ? format(parseISO(b.slot.date), 'd MMM yyyy', { locale: idLocale }) : '—'}
                   </p>
@@ -268,7 +268,7 @@ export default function AdminBookings() {
                 </div>
 
                 {/* actions */}
-                <div className="shrink-0 flex gap-2">
+                <div className="shrink-0 flex gap-2 w-full sm:w-auto justify-end empty:hidden">
                   {b.status === 'pending' && (
                     <button
                       onClick={() => setActionTarget({ action: 'confirm', booking: b })}

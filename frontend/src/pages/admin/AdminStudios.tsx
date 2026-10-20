@@ -44,8 +44,10 @@ function buildFormData(form: FormState, thumbFile: File | null): FormData {
   fd.append('capacity',    form.capacity)
   fd.append('color',       form.color)
   fd.append('is_active',   form.is_active ? '1' : '0')
-  form.features.split(',').map(s => s.trim()).filter(Boolean)
-    .forEach(f => fd.append('features[]', f))
+  const features = form.features.split(',').map(s => s.trim()).filter(Boolean)
+  // An empty array isn't sent by FormData at all, so send an explicit empty value to clear the list
+  if (features.length) features.forEach(f => fd.append('features[]', f))
+  else fd.append('features', '')
   if (thumbFile) fd.append('thumbnail', thumbFile)
   return fd
 }
@@ -339,7 +341,7 @@ export default function AdminStudios() {
   return (
     <div>
       {/* header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6 md:mb-8">
         <div>
           <h1 className="text-3xl font-extrabold text-ink">Studio</h1>
           <p className="text-sm font-semibold text-gray-400 mt-1">Kelola booth dan ruang foto kamu.</p>

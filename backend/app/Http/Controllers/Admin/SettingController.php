@@ -17,6 +17,17 @@ class SettingController extends Controller
     public function index(): JsonResponse
     {
         $settings = Setting::whereIn('key', $this->publicKeys)->pluck('value', 'key');
+
+        // The server key stays in .env; only report what kind it is so the admin can spot
+        // a missing/placeholder key (payments then fail with "Unauthorized")
+        $key = (string) config('services.midtrans.server_key');
+        $settings['server_key_status'] = match (true) {
+            $key === ''                             => 'missing',
+            str_starts_with($key, 'SB-Mid-server-') => 'sandbox',
+            str_starts_with($key, 'Mid-server-')    => 'production',
+            default                                 => 'invalid',
+        };
+
         return response()->json($settings);
     }
 

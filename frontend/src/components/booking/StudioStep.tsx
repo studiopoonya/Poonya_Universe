@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useStudios } from '@/hooks/useStudios'
 import PrimaryButton from '@/components/ui/PrimaryButton'
+import StepActions from '@/components/ui/StepActions'
 import SkeletonCard from '@/components/ui/SkeletonCard'
 import { formatIDR } from '@/lib/utils'
 import type { Studio } from '@/types'
@@ -23,7 +24,7 @@ export default function StudioStep({ onNext, initialValue }: Props) {
 
   return (
     <div>
-      <h2 className="text-2xl font-extrabold text-ink mb-1">Pilih Studio 🏠</h2>
+      <h2 className="text-xl md:text-2xl font-extrabold text-ink mb-1">Pilih Studio 🏠</h2>
       <p className="text-sm text-gray-400 font-semibold mb-6">Setiap studio punya vibe dan fasilitas berbeda.</p>
 
       {isLoading ? (
@@ -48,7 +49,7 @@ export default function StudioStep({ onNext, initialValue }: Props) {
               >
                 <div className="h-2 w-full" style={{ background: studio.color }} />
 
-                <div className={`p-5 transition-colors ${isSelected ? 'bg-brand-50' : 'bg-white'}`}>
+                <div className={`p-4 md:p-5 transition-colors ${isSelected ? 'bg-brand-50' : 'bg-white'}`}>
                   <div className="flex justify-between items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -70,7 +71,7 @@ export default function StudioStep({ onNext, initialValue }: Props) {
                     </div>
 
                     <div className="text-right shrink-0">
-                      <p className="text-xl font-extrabold text-ink">{formatIDR(studio.price)}</p>
+                      <p className="text-lg md:text-xl font-extrabold text-ink">{formatIDR(studio.price)}</p>
                       <p className="text-[10px] font-bold text-gray-400 mt-0.5">per sesi</p>
                       <p className="text-[10px] font-bold text-gray-400 mt-1">Max {studio.capacity} orang</p>
                       {isSelected && (
@@ -94,11 +95,11 @@ export default function StudioStep({ onNext, initialValue }: Props) {
         </motion.div>
       )}
 
-      <div className="mt-8">
+      <StepActions>
         <PrimaryButton disabled={!selected} onClick={() => selected && onNext({ studio_id: selected })}>
           Lanjut →
         </PrimaryButton>
-      </div>
+      </StepActions>
     </div>
   )
 }

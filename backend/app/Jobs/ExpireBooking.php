@@ -25,7 +25,7 @@ class ExpireBooking implements ShouldQueue
             if (! $booking) return;
 
             $booking->update(['status' => 'expired']);
-            $booking->slot()->update(['status' => 'available', 'locked_until' => null]);
+            $booking->releaseSlot();
         });
     }
 }

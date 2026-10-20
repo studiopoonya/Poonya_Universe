@@ -11,6 +11,8 @@ class DashboardController extends Controller
 {
     public function stats(): JsonResponse
     {
+        Booking::expireStale();
+
         $monthStart = now()->startOfMonth();
         $monthEnd   = now()->endOfMonth();
 

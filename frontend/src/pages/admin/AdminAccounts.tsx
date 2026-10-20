@@ -109,7 +109,7 @@ function AccountModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.92, y: 20 }}
         transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-        className="bg-white rounded-3xl border-2 border-ink shadow-cartoon-xl w-full max-w-md"
+        className="bg-white rounded-3xl border-2 border-ink shadow-cartoon-xl w-full max-w-md max-h-[92vh] overflow-y-auto"
       >
         {/* header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b-2 border-ink">
@@ -160,7 +160,7 @@ function AccountModal({
                 type={showPass ? 'text' : 'password'}
                 value={form.password}
                 onChange={e => set('password', e.target.value)}
-                placeholder={isEdit ? '••••••••' : 'Min. 6 karakter'}
+                placeholder={isEdit ? '••••••••' : 'Min. 8 karakter'}
                 className={inputClass + ' pr-11'}
               />
               <button
@@ -326,7 +326,7 @@ export default function AdminAccounts() {
   return (
     <div className="max-w-4xl mx-auto">
       {/* header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6 md:mb-8">
         <div>
           <h1 className="text-2xl font-extrabold text-ink">Accounts</h1>
           <p className="text-sm font-semibold text-gray-400 mt-0.5">Kelola akun admin dan staff.</p>

@@ -5,6 +5,7 @@ import PublicLayout from '@/layouts/PublicLayout'
 import AdminLayout  from '@/layouts/AdminLayout'
 import HomePage       from '@/pages/HomePage'
 import BookingPage    from '@/pages/BookingPage'
+import BookingSuccessPage from '@/pages/BookingSuccessPage'
 import LoginPage      from '@/pages/LoginPage'
 import AdminDashboard from '@/pages/admin/AdminDashboard'
 import AdminStudios   from '@/pages/admin/AdminStudios'
@@ -12,6 +13,7 @@ import AdminBookings  from '@/pages/admin/AdminBookings'
 import AdminPayment   from '@/pages/admin/AdminPayment'
 import AdminSettings  from '@/pages/admin/AdminSettings'
 import AdminAccounts  from '@/pages/admin/AdminAccounts'
+import AdminEmail     from '@/pages/admin/AdminEmail'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -37,6 +39,7 @@ export default function App() {
           <Route element={<PublicLayout />}>
             <Route path="/"        element={<HomePage />} />
             <Route path="/booking" element={<BookingPage />} />
+            <Route path="/booking/success" element={<BookingSuccessPage />} />
           </Route>
 
           {/* Admin login (no auth required) */}
@@ -57,6 +60,7 @@ export default function App() {
             <Route path="payment"       element={<AdminPayment />} />
             <Route path="settings"      element={<AdminSettings />} />
             <Route path="accounts"      element={<AdminAccounts />} />
+            <Route path="email"         element={<AdminEmail />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

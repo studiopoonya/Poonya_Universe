@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreBookingRequest;
 use App\Jobs\ExpireBooking;
 use App\Models\{Booking, Payment, Slot, Studio};
 use App\Services\PaymentGatewayService;
@@ -16,6 +17,8 @@ class BookingController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        Booking::expireStale();
+
         $bookings = Booking::with(['studio', 'slot', 'payment', 'user'])
             ->when($request->search, fn ($q) => $q->where(function ($q) use ($request) {
                 $q->where('customer_name',  'like', "%{$request->search}%")
@@ -38,14 +41,18 @@ class BookingController extends Controller
     /** Walk-in: admin creates booking on behalf of a customer. */
     public function store(Request $request): JsonResponse
     {
+        $request->merge(['customer_phone' => StoreBookingRequest::normalizePhone($request->input('customer_phone'))]);
+
         $data = $request->validate([
             'studio_id'      => ['required', 'integer', 'exists:studios,id'],
             'slot_id'        => ['required', 'integer', 'exists:slots,id'],
             'customer_name'  => ['required', 'string', 'max:255'],
-            'customer_email' => ['required', 'email'],
-            'customer_phone' => ['required', 'string', 'max:30'],
-            'notes'          => ['nullable', 'string'],
+            'customer_email' => ['required', StoreBookingRequest::EMAIL_RULE, 'max:255'],
+            'customer_phone' => ['required', 'string', StoreBookingRequest::PHONE_RULE],
+            'notes'          => ['nullable', 'string', 'max:1000'],
             'payment_method' => ['required', 'in:cash,qris'],
+        ], [
+            'customer_phone.regex' => 'Nomor HP tidak valid. Gunakan 8–15 angka, contoh 081234567890.',
         ]);
 
         try {
@@ -60,6 +67,9 @@ class BookingController extends Controller
                 abort_if($slot->studio_id != $data['studio_id'], 422, 'Slot bukan milik studio ini.');
 
                 $slot->update(['status' => 'locked', 'locked_until' => now()->addMinutes(30)]);
+
+                // Any pending booking still on this slot let its lock lapse — retire it so it can't be confirmed later
+                Booking::where('slot_id', $slot->id)->where('status', 'pending')->update(['status' => 'expired']);
 
                 $studio  = Studio::findOrFail($data['studio_id']);
                 $orderId = 'WALKIN-' . strtoupper(Str::random(6)) . '-' . time();
@@ -93,6 +103,7 @@ class BookingController extends Controller
                     $booking->update(['status' => 'confirmed', 'confirmed_at' => now()]);
                     $booking->slot->update(['status' => 'booked', 'locked_until' => null]);
                     $booking->payment()->update(['status' => 'paid', 'paid_at' => now(), 'method' => 'cash']);
+                    $booking->sendConfirmation();
                 });
 
                 return response()->json([
@@ -104,7 +115,17 @@ class BookingController extends Controller
 
             // QRIS: generate Midtrans token
             ExpireBooking::dispatch($booking)->delay(now()->addMinutes(30));
-            $paymentToken = $this->gateway->createTransaction($booking->load('studio'));
+            try {
+                $paymentToken = $this->gateway->createTransaction($booking->load('studio'));
+            } catch (\Throwable $e) {
+                report($e);
+                $booking->cancelUnpaid();
+
+                return response()->json([
+                    'message' => 'Pembayaran sedang tidak bisa diproses. Silakan coba lagi sebentar lagi.',
+                    'code'    => 'PAYMENT_GATEWAY_ERROR',
+                ], 502);
+            }
 
             return response()->json([
                 'booking_id'    => $booking->id,
@@ -126,7 +147,7 @@ class BookingController extends Controller
         abort_if(! in_array($booking->status, ['pending', 'confirmed']), 422, 'Cannot cancel this booking.');
 
         $booking->update(['status' => 'cancelled']);
-        $booking->slot()->update(['status' => 'available', 'locked_until' => null]);
+        $booking->releaseSlot();
 
         return response()->json(['message' => 'Booking dibatalkan.']);
     }
@@ -140,6 +161,7 @@ class BookingController extends Controller
             $booking->update(['status' => 'confirmed', 'confirmed_at' => now()]);
             $booking->slot->update(['status' => 'booked', 'locked_until' => null]);
             $booking->payment()->update(['status' => 'paid', 'paid_at' => now()]);
+            $booking->sendConfirmation();
         });
 
         return response()->json(['message' => 'Booking dikonfirmasi.']);

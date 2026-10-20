@@ -1,31 +1,37 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  format, addDays, startOfDay, isSameDay,
+  format, addDays, startOfDay, isSameDay, parseISO,
   startOfMonth, endOfMonth, addMonths, subMonths, isBefore,
 } from 'date-fns'
 import { id as idLocale } from 'date-fns/locale'
 import { useAvailableSlots } from '@/hooks/useAvailableSlots'
 import PrimaryButton from '@/components/ui/PrimaryButton'
+import StepActions from '@/components/ui/StepActions'
 import SkeletonCard from '@/components/ui/SkeletonCard'
 import type { Slot } from '@/types'
 
 interface Props {
   studioId: number
-  onNext: (data: { slot_id: number; date: string }) => void
+  onNext: (data: { slot_id: number; date: string; time: string }) => void
   onBack: () => void
   initialSlotId?: number
+  /** yyyy-MM-dd of the slot picked earlier, so going back shows that day again */
+  initialDate?: string
 }
 
 const today = startOfDay(new Date())
 
-export default function DateTimeStep({ studioId, onNext, onBack, initialSlotId }: Props) {
-  const [viewMonth, setViewMonth] = useState<Date>(startOfMonth(today))
-  const [date, setDate]           = useState<Date>(today)
+export default function DateTimeStep({ studioId, onNext, onBack, initialSlotId, initialDate }: Props) {
+  const startDate = initialDate && !isBefore(parseISO(initialDate), today) ? parseISO(initialDate) : today
+  const [viewMonth, setViewMonth] = useState<Date>(startOfMonth(startDate))
+  const [date, setDate]           = useState<Date>(startDate)
   const [slotId, setSlot]         = useState<number | null>(initialSlotId ?? null)
 
   const dateStr = format(date, 'yyyy-MM-dd')
   const { data: slots = [], isLoading } = useAvailableSlots(studioId, dateStr)
+  // Only a slot visible (and still free) on the shown day counts as picked
+  const selected = slots.find((s: Slot) => s.id === slotId && s.is_available)
 
   const windowStart = isBefore(startOfMonth(viewMonth), today) ? today : startOfMonth(viewMonth)
   const windowEnd   = endOfMonth(viewMonth)
@@ -40,7 +46,7 @@ export default function DateTimeStep({ studioId, onNext, onBack, initialSlotId }
 
   return (
     <div>
-      <h2 className="text-2xl font-extrabold text-ink mb-1">Pilih Tanggal & Waktu 📅</h2>
+      <h2 className="text-xl md:text-2xl font-extrabold text-ink mb-1">Pilih Tanggal & Waktu 📅</h2>
       <p className="text-sm text-gray-400 font-semibold mb-5">Setiap sesi adalah booth pribadi untukmu.</p>
 
       {/* Month navigator */}
@@ -48,7 +54,7 @@ export default function DateTimeStep({ studioId, onNext, onBack, initialSlotId }
         <button
           disabled={prevDisabled}
           onClick={() => { setViewMonth((m) => subMonths(m, 1)); setSlot(null) }}
-          className="w-8 h-8 rounded-xl border-2 border-ink flex items-center justify-center text-ink font-extrabold text-lg shadow-cartoon-sm hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-cartoon disabled:opacity-25 disabled:cursor-not-allowed disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 transition-all duration-100 bg-white"
+          className="w-10 h-10 md:w-8 md:h-8 rounded-xl border-2 border-ink flex items-center justify-center text-ink font-extrabold text-lg shadow-cartoon-sm hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-cartoon disabled:opacity-25 disabled:cursor-not-allowed disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 transition-all duration-100 bg-white"
         >
           ‹
         </button>
@@ -61,7 +67,7 @@ export default function DateTimeStep({ studioId, onNext, onBack, initialSlotId }
         </motion.p>
         <button
           onClick={() => { setViewMonth((m) => addMonths(m, 1)); setSlot(null) }}
-          className="w-8 h-8 rounded-xl border-2 border-ink flex items-center justify-center text-ink font-extrabold text-lg shadow-cartoon-sm hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-cartoon transition-all duration-100 bg-white"
+          className="w-10 h-10 md:w-8 md:h-8 rounded-xl border-2 border-ink flex items-center justify-center text-ink font-extrabold text-lg shadow-cartoon-sm hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-cartoon transition-all duration-100 bg-white"
         >
           ›
         </button>
@@ -119,7 +125,7 @@ export default function DateTimeStep({ studioId, onNext, onBack, initialSlotId }
             ? Array.from({ length: 12 }).map((_, i) => <SkeletonCard key={i} className="h-11" />)
             : slots.length === 0
               ? (
-                <div className="col-span-4 text-center py-8 bg-white rounded-2xl border-2 border-ink shadow-cartoon-sm">
+                <div className="col-span-full text-center py-8 bg-white rounded-2xl border-2 border-ink shadow-cartoon-sm">
                   <p className="text-sm font-bold text-gray-400">😴 Tidak ada slot tersedia.</p>
                 </div>
               )
@@ -129,7 +135,7 @@ export default function DateTimeStep({ studioId, onNext, onBack, initialSlotId }
                   disabled={!s.is_available}
                   onClick={() => setSlot(s.id)}
                   className={`
-                    py-2.5 rounded-xl text-sm font-extrabold transition-all duration-100 border-2
+                    py-3 md:py-2.5 rounded-xl text-sm font-extrabold transition-all duration-100 border-2
                     ${!s.is_available
                       ? 'bg-gray-50 text-gray-300 cursor-not-allowed line-through border-gray-200'
                       : slotId === s.id
@@ -144,17 +150,21 @@ export default function DateTimeStep({ studioId, onNext, onBack, initialSlotId }
         </motion.div>
       </AnimatePresence>
 
-      <div className="flex gap-3 mt-8">
+      <StepActions>
         <PrimaryButton variant="ghost" onClick={onBack} className="w-auto px-5">
           ← Kembali
         </PrimaryButton>
         <PrimaryButton
-          disabled={!slotId}
-          onClick={() => slotId && onNext({ slot_id: slotId, date: dateStr })}
+          disabled={!selected}
+          onClick={() => selected && onNext({
+            slot_id: selected.id,
+            date: dateStr,
+            time: `${selected.start_time.slice(0, 5)} – ${selected.end_time.slice(0, 5)}`,
+          })}
         >
           Lanjut →
         </PrimaryButton>
-      </div>
+      </StepActions>
     </div>
   )
 }
