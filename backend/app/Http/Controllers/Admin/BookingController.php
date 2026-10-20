@@ -149,7 +149,7 @@ class BookingController extends Controller
                     'cash_received' => $cash,
                     'cash_change'   => $cash !== null ? $cash - $booking->payment->amount : null,
                 ]);
-                $booking->sendConfirmation();
+                $booking->sendConfirmation(notifyStudio: false); // the admin is the one confirming
             });
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
             return response()->json(['message' => 'Jadwal ini sudah diambil customer lain yang bayar online. Pilih jam lain untuk customer ini.'], 409);

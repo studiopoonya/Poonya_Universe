@@ -52,7 +52,7 @@ class ManageBookingController extends Controller
             }
 
             SlotBooker::attach($booking, $slots);
-            $booking->update(['slot_id' => $new->id, 'reschedule_count' => $booking->reschedule_count + 1]);
+            $booking->update(['slot_id' => $new->id, 'reschedule_count' => $booking->reschedule_count + 1, 'reminded_at' => null]);
 
             $booking->sendConfirmation('rescheduled');
 

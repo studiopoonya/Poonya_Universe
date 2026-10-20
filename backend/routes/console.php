@@ -14,5 +14,8 @@ Schedule::call(fn () => \App\Models\Booking::expireStale())->everyMinute()->name
 // Keep a month of slots ready ahead (slots are also created on demand when a day is opened)
 Schedule::command('slots:generate 30')->dailyAt('00:10')->name('generate-slots');
 
+// Day-before reminder email to customers (confirmed + pay-at-studio)
+Schedule::command('bookings:remind')->dailyAt('09:00')->name('booking-reminders');
+
 // Clean out expired admin login tokens
 Schedule::command('sanctum:prune-expired --hours=24')->daily()->name('prune-tokens');

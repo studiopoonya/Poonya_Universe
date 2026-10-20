@@ -31,7 +31,13 @@ class MailSettingController extends Controller
             'mail_password'     => ['nullable', 'string', 'max:255'], // empty = keep current
             'mail_from_address' => ['required', 'email', 'max:255'],
             'mail_from_name'    => ['nullable', 'string', 'max:255'],
+            'admin_notify_email' => ['nullable', 'string', 'max:500', function ($attr, $value, $fail) {
+                foreach (array_filter(array_map('trim', explode(',', (string) $value))) as $e) {
+                    if (! filter_var($e, FILTER_VALIDATE_EMAIL)) $fail("\"{$e}\" bukan alamat email yang valid.");
+                }
+            }],
         ]);
+        $data['admin_notify_email'] = implode(', ', array_filter(array_map('trim', explode(',', (string) ($data['admin_notify_email'] ?? '')))));
 
         if (filled($data['mail_password'] ?? null)) {
             $data['mail_password'] = Crypt::encryptString($data['mail_password']);

@@ -143,9 +143,9 @@ export default function AdminBookings() {
     onError: (err: any) => toast.error(err.response?.data?.message ?? 'Terjadi kesalahan.'),
   })
 
-  const [search,       setSearch]       = useState('')
-  const [searchInput,  setSearchInput]  = useState('')
   const [params] = useSearchParams()
+  const [search,       setSearch]       = useState(params.get('search') ?? '') // e.g. from a new-booking email
+  const [searchInput,  setSearchInput]  = useState(params.get('search') ?? '')
   const [statusFilter, setStatusFilter] = useState(params.get('status') ?? '') // e.g. ?status=refund from the dashboard
   const [exporting,    setExporting]    = useState(false)
   const [dateFilter,   setDateFilter]   = useState('')

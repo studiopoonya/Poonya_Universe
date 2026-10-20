@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Mail, Send, Eye, EyeOff } from 'lucide-react'
+import { Mail, Send, Eye, EyeOff, BellRing } from 'lucide-react'
 import toast from 'react-hot-toast'
 import api from '@/lib/axios'
 import Select from '@/components/ui/Select'
@@ -13,6 +13,7 @@ interface MailForm {
   mail_password: string
   mail_from_address: string
   mail_from_name: string
+  admin_notify_email: string
 }
 
 interface SavedMail extends Partial<Omit<MailForm, 'mail_password'>> {
@@ -22,6 +23,7 @@ interface SavedMail extends Partial<Omit<MailForm, 'mail_password'>> {
 const DEFAULTS: MailForm = {
   mail_host: '', mail_port: '587', mail_encryption: 'tls',
   mail_username: '', mail_password: '', mail_from_address: '', mail_from_name: 'Poonya Studio',
+  admin_notify_email: '',
 }
 
 const PRESETS = [
@@ -191,13 +193,34 @@ export default function AdminEmail() {
         )}
       </div>
 
+      <div className="bg-white rounded-3xl border-2 border-ink shadow-cartoon p-6 mb-5">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-11 h-11 rounded-2xl bg-amber-400 border-2 border-ink shadow-cartoon-sm flex items-center justify-center shrink-0">
+            <BellRing className="w-5 h-5 text-ink" strokeWidth={2.5} />
+          </div>
+          <div className="min-w-0">
+            <p className="font-extrabold text-ink">Notifikasi Booking Masuk</p>
+            <p className="text-xs font-semibold text-gray-400">Email ke studio setiap ada booking baru, reservasi bayar di studio, atau jadwal diubah.</p>
+          </div>
+        </div>
+        <Field label="Kirim ke" hint="Pisahkan dengan koma untuk lebih dari satu. Kosongkan = dikirim ke semua akun admin.">
+          <input
+            value={form.admin_notify_email} onChange={(e) => set('admin_notify_email', e.target.value)}
+            className={inputCls} placeholder="studiopoonya@gmail.com" inputMode="email" autoComplete="off"
+          />
+        </Field>
+        <p className="text-xs font-semibold text-gray-400 mt-3">
+          Customer juga otomatis dapat email pengingat <strong>H-1</strong> (jam 09.00) sebelum jadwal fotonya.
+        </p>
+      </div>
+
       <button
         onClick={() => save.mutate()}
         disabled={save.isPending || isLoading}
         className="w-full flex items-center justify-center gap-2 py-3.5 mb-5 bg-brand-500 text-white font-extrabold text-sm rounded-2xl border-2 border-ink shadow-cartoon hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-cartoon-lg disabled:opacity-50 disabled:cursor-not-allowed active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all duration-100"
       >
         <Mail className="w-4 h-4" strokeWidth={2.5} />
-        {save.isPending ? 'Menyimpan…' : 'Simpan Email Pengirim'}
+        {save.isPending ? 'Menyimpan…' : 'Simpan Pengaturan Email'}
       </button>
 
       {/* Test */}

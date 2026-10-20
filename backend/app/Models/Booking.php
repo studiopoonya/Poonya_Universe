@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Notifications\BookingConfirmed;
+use App\Notifications\{BookingConfirmed, NewBookingAlert};
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\{DB, Notification};
 
@@ -11,7 +11,7 @@ class Booking extends Model
     protected $fillable = [
         'user_id', 'studio_id', 'slot_id', 'sessions', 'promo_code_id', 'discount_amount', 'reschedule_count', 'order_id', 'status',
         'customer_name', 'customer_email', 'customer_phone',
-        'notes', 'expires_at', 'confirmed_at',
+        'notes', 'expires_at', 'confirmed_at', 'reminded_at',
     ];
 
     /** Max consecutive 30-minute sessions in one booking (4 = 2 hours). */
@@ -25,6 +25,7 @@ class Booking extends Model
             'sessions'     => 'integer',
             'expires_at'   => 'datetime',
             'confirmed_at' => 'datetime',
+            'reminded_at'  => 'datetime',
         ];
     }
 
@@ -128,11 +129,28 @@ class Booking extends Model
             }));
     }
 
-    /** Email the confirmation to the address entered at checkout (most customers are guests). */
-    /** @param  string  $kind  confirmed | rescheduled | onsite */
-    public function sendConfirmation(string $kind = 'confirmed'): void
+    /**
+     * Email the confirmation to the address entered at checkout (most customers are guests),
+     * and tell the studio a booking came in.
+     *
+     * @param  string  $kind  confirmed | rescheduled | onsite
+     * @param  bool  $notifyStudio  false when an admin did it themselves (e.g. took cash at the desk)
+     */
+    public function sendConfirmation(string $kind = 'confirmed', bool $notifyStudio = true): void
     {
         Notification::route('mail', $this->customer_email)->notify(new BookingConfirmed($this, $kind));
+
+        if ($notifyStudio && $to = self::studioRecipients()) {
+            Notification::route('mail', $to)->notify(new NewBookingAlert($this, $kind));
+        }
+    }
+
+    /** Addresses for new-booking alerts: the one(s) set in admin → Email, else every admin account. */
+    public static function studioRecipients(): array
+    {
+        $set = array_values(array_filter(array_map('trim', explode(',', (string) Setting::get('admin_notify_email')))));
+
+        return $set ?: User::where('role', 'admin')->pluck('email')->all();
     }
 
     public const RESCHEDULE_MIN_HOURS = 24;

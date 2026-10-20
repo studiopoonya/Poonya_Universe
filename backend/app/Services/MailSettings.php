@@ -15,6 +15,7 @@ class MailSettings
     public const KEYS = [
         'mail_host', 'mail_port', 'mail_username', 'mail_password',
         'mail_encryption', 'mail_from_address', 'mail_from_name',
+        'admin_notify_email', // who gets new-booking alerts (comma-separated; empty = all admins)
     ];
 
     /** @return array<string, ?string> raw values, password still encrypted */
