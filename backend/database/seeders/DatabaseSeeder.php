@@ -18,7 +18,6 @@ class DatabaseSeeder extends Seeder
         $this->call([
             AdminUserSeeder::class,
             StudioSeeder::class,       // studios first — slots FK depends on it
-            PackageSeeder::class,
             OperationalHourSeeder::class,
         ]);
     }

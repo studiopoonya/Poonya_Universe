@@ -1,7 +1,19 @@
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import api from '@/lib/axios'
+
+// Only show the count once it's big enough to be convincing
+const SOCIAL_PROOF_MIN = 10
 
 export default function HomePage() {
+  const { data: stats } = useQuery<{ sessions_this_week: number }>({
+    queryKey: ['public-stats'],
+    queryFn: () => api.get('/stats').then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
+  })
+  const sessions = stats?.sessions_this_week ?? 0
+
   return (
     <div className="h-full bg-surface-muted overflow-hidden">
       {/* Hero */}
@@ -60,15 +72,16 @@ export default function HomePage() {
           </Link>
         </motion.div>
 
-        {/* social proof */}
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.36 }}
-          className="mt-4 text-xs font-bold text-gray-400 z-10"
-        >
-          🌟 Sudah 200+ sesi foto minggu ini
-        </motion.p>
+        {/* social proof — real confirmed sessions this week */}
+        {sessions >= SOCIAL_PROOF_MIN && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-4 text-xs font-bold text-gray-400 z-10"
+          >
+            🌟 {sessions} sesi foto sudah dibooking minggu ini
+          </motion.p>
+        )}
       </section>
 
     </div>

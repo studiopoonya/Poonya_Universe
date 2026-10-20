@@ -1,7 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\{AuthController, BookingController, PackageController, SlotController, StudioController};
+use App\Http\Controllers\Api\{AuthController, BookingController, SlotController, StudioController};
 use App\Http\Controllers\Admin;
 use App\Http\Controllers\Webhook\PaymentWebhookController;
 use App\Models\Setting;
@@ -12,10 +12,16 @@ Route::get('settings', fn () => response()->json(
            ->pluck('value', 'key')
 ));
 
+// Real social proof for the homepage (replaces a hardcoded "200+" claim)
+Route::get('stats', fn () => response()->json([
+    'sessions_this_week' => \App\Models\Booking::where('status', 'confirmed')
+        ->whereHas('slot', fn ($q) => $q->whereBetween('date', [now()->startOfWeek()->toDateString(), now()->endOfWeek()->toDateString()]))
+        ->count(),
+]));
+
 Route::get('studios',          [StudioController::class, 'index']);
 Route::get('studios/{studio}', [StudioController::class, 'show']);
 Route::get('slots/available',  [SlotController::class, 'available']);
-Route::get('packages',         [PackageController::class, 'index']);
 Route::get('bookings/{booking}/status', [BookingController::class, 'status']);
 Route::get('bookings/order/{orderId}',  [BookingController::class, 'showByOrder']);
 
@@ -67,8 +73,6 @@ Route::middleware(['auth:sanctum', 'admin'])
 Route::middleware(['auth:sanctum', 'admin.only'])
     ->prefix('admin')
     ->group(function () {
-        Route::apiResource('packages', Admin\PackageController::class);
-
         Route::get('mail-settings',       [Admin\MailSettingController::class, 'index']);
         Route::put('mail-settings',       [Admin\MailSettingController::class, 'update']);
         Route::post('mail-settings/test', [Admin\MailSettingController::class, 'test'])->middleware('throttle:6,1');

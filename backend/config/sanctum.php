@@ -50,7 +50,8 @@ return [
     |
     */
 
-    'expiration' => null,
+    // Admin login tokens expire after 7 days (minutes); the frontend sends you back to login
+    'expiration' => (int) env('SANCTUM_EXPIRATION', 60 * 24 * 7) ?: null,
 
     /*
     |--------------------------------------------------------------------------

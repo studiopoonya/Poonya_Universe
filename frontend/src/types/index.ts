@@ -12,18 +12,6 @@ export interface Studio {
   sort_order: number
 }
 
-export interface Package {
-  id: number
-  name: string
-  slug: string
-  description: string
-  duration_min: number
-  price: number
-  features: string[]
-  is_active: boolean
-  sort_order: number
-}
-
 export interface Slot {
   id: number
   start_time: string
