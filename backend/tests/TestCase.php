@@ -30,7 +30,7 @@ abstract class TestCase extends BaseTestCase
     protected function midtransUp(): void
     {
         Http::fake(fn () => $this->gatewayUp
-            ? Http::response(['token' => 'snap-token'], 201)
+            ? Http::response(['token' => 'snap-token', 'invoice_url' => 'https://checkout-staging.xendit.co/web/inv-123'], 201)
             : Http::response(['error_messages' => ['Unauthorized']], 401));
     }
 

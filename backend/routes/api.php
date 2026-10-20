@@ -7,10 +7,12 @@ use App\Http\Controllers\Webhook\PaymentWebhookController;
 use App\Models\Setting;
 
 // ── Public ──────────────────────────────────────────────────────────
-Route::get('settings', fn () => response()->json(
-    Setting::whereIn('key', ['midtrans_snap_url', 'midtrans_client_key', 'midtrans_is_production'])
-           ->pluck('value', 'key')
-));
+// What the checkout needs to know (only public values: never a secret key)
+Route::get('settings', fn () => response()->json([
+    'payment_gateway'     => \App\Services\PaymentGatewayService::provider(),
+    'midtrans_client_key' => (string) Setting::get('midtrans_client_key'),
+    'midtrans_snap_url'   => \App\Services\PaymentGatewayService::midtransSnapJs(),
+]));
 
 // Real social proof for the homepage (replaces a hardcoded "200+" claim)
 Route::get('stats', fn () => response()->json([
@@ -102,3 +104,4 @@ Route::middleware(['auth:sanctum', 'admin.only'])
 
 // ── Webhooks ──────────────────────────────────────────────────────────
 Route::post('webhooks/payment/midtrans', [PaymentWebhookController::class, 'midtrans']);
+Route::post('webhooks/payment/xendit',   [PaymentWebhookController::class, 'xendit']);

@@ -57,7 +57,7 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
       setResult(res.data)
 
       // 100% promo: already confirmed, nothing to pay (the status poll shows the success screen)
-      if (res.data.payment_token) await pay(res.data.payment_token)
+      if (res.data.payment_url || res.data.payment_token) await pay(res.data)
     } catch (err: any) {
       const code = err.response?.data?.code
       if (err.response?.status === 429) {
@@ -84,7 +84,7 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
       const res = await api.post<BookingResponse>('/bookings/pay-online', { order_id: bookingResult.order_id, email: booking.customer_email })
       setResult(res.data)
       await qc.invalidateQueries({ queryKey: ['booking-status', bookingResult.booking_id] }) // resume polling
-      if (res.data.payment_token) await pay(res.data.payment_token)
+      if (res.data.payment_url || res.data.payment_token) await pay(res.data)
     } catch (err: any) {
       toast.error(err.response?.data?.message ?? 'Terjadi kesalahan. Silakan coba lagi.', { duration: 7000 })
       if (err.response?.data?.code === 'SLOT_UNAVAILABLE') onRestart()
@@ -93,11 +93,17 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
     }
   }
 
-  const pay = (token: string) =>
-    openSnap(token, {
+  /** Xendit: go to its checkout page (it returns to /booking/success). Midtrans: Snap popup. */
+  const pay = (r: BookingResponse) => {
+    if (r.payment_url) {
+      window.location.href = r.payment_url
+      return Promise.resolve()
+    }
+    return openSnap(r.payment_token!, {
       onError: () => toast.error('Pembayaran gagal. Silakan coba lagi.'),
       onClose: () => toast('Pembayaran belum selesai.', { icon: '⚠️' }),
     }).catch(() => toast.error('Gagal membuka halaman pembayaran. Periksa koneksi lalu coba lagi.'))
+  }
 
   // Reserved to pay at the studio — the slot is NOT locked, so nudge toward paying now
   const status = statusData?.status ?? (bookingResult?.status === 'onsite' ? 'onsite' : undefined)
@@ -297,8 +303,8 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
           <PrimaryButton loading={loading} disabled={!quote || quoting} onClick={handlePay}>
             {quote?.total === 0 ? 'Konfirmasi Booking' : method === 'onsite' ? 'Reservasi' : 'Bayar Sekarang'}
           </PrimaryButton>
-        ) : bookingResult.payment_token && (
-          <PrimaryButton onClick={() => pay(bookingResult.payment_token!)}>
+        ) : (bookingResult.payment_token || bookingResult.payment_url) && (
+          <PrimaryButton onClick={() => pay(bookingResult)}>
             Buka Kembali Pembayaran
           </PrimaryButton>
         )}

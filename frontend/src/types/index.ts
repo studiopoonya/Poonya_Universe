@@ -35,8 +35,11 @@ export interface BookingResponse {
   booking_id: number
   order_id: string
   expires_at?: string
-  /** Absent when nothing is left to pay (100% promo) — then status is 'confirmed' */
+  /** Midtrans: Snap popup token. Absent when nothing is left to pay (100% promo) */
   payment_token?: string
+  /** Xendit: hosted checkout page to send the customer to */
+  payment_url?: string
+  provider?: 'midtrans' | 'xendit'
   status?: 'confirmed' | 'onsite'
 }
 

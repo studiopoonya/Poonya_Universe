@@ -30,6 +30,8 @@
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="MIDTRANS_SERVER_KEY" value="SB-Mid-server-test"/>
+        <env name="XENDIT_SECRET_KEY" value="xnd_development_test"/>
+        <env name="XENDIT_CALLBACK_TOKEN" value="test-callback-token"/>
         <env name="FRONTEND_URL" value="http://frontend.test"/>
         <env name="TRUSTED_PROXIES" value=""/>
         <env name="QUEUE_CONNECTION" value="sync"/>

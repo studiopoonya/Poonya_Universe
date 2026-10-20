@@ -64,7 +64,7 @@ class BookingController extends Controller
 
                 Payment::create([
                     'booking_id' => $booking->id,
-                    'gateway'    => $onsite ? 'cash' : 'midtrans',
+                    'gateway'    => $onsite ? 'cash' : PaymentGatewayService::provider(),
                     'amount'     => $quote['total'],
                     'currency'   => 'IDR',
                     'status'     => 'pending',
@@ -97,7 +97,7 @@ class BookingController extends Controller
             ExpireBooking::dispatch($booking)->delay(now()->addMinutes(15));
 
             try {
-                $paymentToken = $this->gateway->createTransaction($booking->load('studio'));
+                $payment = $this->gateway->createTransaction($booking->load('studio'));
             } catch (\Throwable $e) {
                 report($e);
                 $booking->cancelUnpaid();
@@ -112,7 +112,7 @@ class BookingController extends Controller
                 'booking_id'    => $booking->id,
                 'order_id'      => $booking->order_id,
                 'expires_at'    => $booking->expires_at->toIso8601String(),
-                'payment_token' => $paymentToken,
+                ...$payment, // payment_token (Midtrans popup) or payment_url (Xendit checkout)
             ], 201);
 
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
@@ -140,7 +140,7 @@ class BookingController extends Controller
             DB::transaction(function () use ($booking) {
                 SlotBooker::take($booking->studio_id, $booking->slot_id, $booking->sessions, 'locked', 15, exceptBookingId: $booking->id);
                 $booking->update(['status' => 'pending', 'expires_at' => now()->addMinutes(15)]);
-                $booking->payment()->update(['gateway' => 'midtrans']);
+                $booking->payment()->update(['gateway' => PaymentGatewayService::provider()]);
             });
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
             return response()->json(['message' => 'Jadwal ini baru saja diambil orang lain. Silakan pilih jam lain.', 'code' => 'SLOT_UNAVAILABLE'], 409);
@@ -149,7 +149,7 @@ class BookingController extends Controller
         ExpireBooking::dispatch($booking)->delay(now()->addMinutes(15));
 
         try {
-            $token = $this->gateway->createTransaction($booking->fresh(['studio', 'payment']));
+            $payment = $this->gateway->createTransaction($booking->fresh(['studio', 'payment']));
         } catch (\Throwable $e) {
             report($e);
             // Back to a plain reservation rather than losing it
@@ -162,7 +162,7 @@ class BookingController extends Controller
             return response()->json(['message' => 'Pembayaran online sedang tidak bisa diproses. Reservasi bayar di tempat kamu tetap tercatat.', 'code' => 'PAYMENT_GATEWAY_ERROR'], 502);
         }
 
-        return response()->json(['booking_id' => $booking->id, 'order_id' => $booking->order_id, 'payment_token' => $token]);
+        return response()->json(['booking_id' => $booking->id, 'order_id' => $booking->order_id, ...$payment]);
     }
 
     /** Price for a slot (weekday/weekend) with an optional promo code, shown before paying. */

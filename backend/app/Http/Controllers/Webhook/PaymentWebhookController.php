@@ -25,33 +25,68 @@ class PaymentWebhookController extends Controller
             return response()->json(['message' => 'Invalid signature'], 403);
         }
 
+        $status = strtolower((string) $payload['transaction_status']);
+
         $this->handleTransaction(
-            orderId:       $payload['order_id'],
-            gatewayRef:    $payload['transaction_id'],
-            method:        $payload['payment_type'],
-            gatewayStatus: $payload['transaction_status'],
-            fraudStatus:   $payload['fraud_status'] ?? null,
-            rawPayload:    $payload,
+            orderId:    $payload['order_id'],
+            gatewayRef: $payload['transaction_id'],
+            method:     $payload['payment_type'],
+            outcome:    $this->resolveOutcome($status, $payload['fraud_status'] ?? null),
+            failStatus: $status === 'expire' ? 'expired' : 'cancelled',
+            rawPayload: $payload,
         );
 
         return response()->json(['message' => 'OK']);
     }
 
+    /**
+     * Xendit Invoice callback. Authenticated by the x-callback-token header, which must
+     * equal the verification token from Xendit Dashboard → Settings → Webhooks.
+     * https://docs.xendit.co/apidocs/invoice-callback
+     */
+    public function xendit(Request $request): JsonResponse
+    {
+        $expected = (string) config('services.xendit.callback_token');
+        if ($expected === '' || ! hash_equals($expected, (string) $request->header('x-callback-token'))) {
+            return response()->json(['message' => 'Invalid callback token'], 403);
+        }
+
+        $payload = $request->all();
+        $status  = strtoupper((string) ($payload['status'] ?? ''));
+
+        $this->handleTransaction(
+            orderId:    (string) ($payload['external_id'] ?? ''),
+            gatewayRef: (string) ($payload['id'] ?? ''),
+            method:     strtolower((string) ($payload['payment_method'] ?? $payload['payment_channel'] ?? 'xendit')),
+            outcome:    match ($status) {
+                'PAID', 'SETTLED' => 'paid',
+                'EXPIRED'         => 'failed',
+                default           => 'pending',
+            },
+            failStatus: 'expired',
+            rawPayload: $payload,
+        );
+
+        return response()->json(['message' => 'OK']);
+    }
+
+    /**
+     * @param  string  $outcome     paid | failed | pending
+     * @param  string  $failStatus  booking status when the payment failed: expired | cancelled
+     */
     private function handleTransaction(
-        string  $orderId,
-        string  $gatewayRef,
-        string  $method,
-        string  $gatewayStatus,
-        ?string $fraudStatus,
-        array   $rawPayload,
+        string $orderId,
+        string $gatewayRef,
+        string $method,
+        string $outcome,
+        string $failStatus,
+        array  $rawPayload,
     ): void {
-        DB::transaction(function () use ($orderId, $gatewayRef, $method, $gatewayStatus, $fraudStatus, $rawPayload) {
+        DB::transaction(function () use ($orderId, $gatewayRef, $method, $outcome, $failStatus, $rawPayload) {
 
             $booking = Booking::where('order_id', $orderId)
                               ->lockForUpdate()
                               ->firstOrFail();
-
-            $outcome = $this->resolveOutcome($gatewayStatus, $fraudStatus);
 
             // Idempotency guard: booking already settled one way or the other
             if ($booking->status !== 'pending') {
@@ -67,7 +102,7 @@ class PaymentWebhookController extends Controller
                         'paid_at'         => now(),
                         'gateway_payload' => $rawPayload,
                     ]);
-                    Log::warning('Midtrans payment received for non-pending booking', [
+                    Log::warning('Payment received for non-pending booking', [
                         'order_id' => $orderId,
                         'status'   => $booking->status,
                     ]);
@@ -100,7 +135,7 @@ class PaymentWebhookController extends Controller
                 $booking->bookSlots();
                 $booking->sendConfirmation();
             } else {
-                $booking->update(['status' => strtolower($gatewayStatus) === 'expire' ? 'expired' : 'cancelled']);
+                $booking->update(['status' => $failStatus]);
                 $booking->releaseSlots();
             }
         });

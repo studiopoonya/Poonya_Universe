@@ -138,11 +138,21 @@ Setiap kali update kode: `php artisan migrate --force && php artisan config:cach
 
 ---
 
-## Midtrans
+## Payment gateway: Midtrans atau Xendit
+
+Pilih gateway yang dipakai customer di panel admin, menu **Settings**. Halaman itu menampilkan status key dan URL webhook yang perlu ditempel di dashboard gateway. Semua key rahasia hanya disimpan di `.env`.
+
+### Xendit
+
+1. Di Xendit Dashboard → **Settings → API Keys**, buat Secret Key dengan izin **Money-in: Write**, lalu isi `XENDIT_SECRET_KEY=xnd_…` di `.env`. Key test diawali `xnd_development_`, key live diawali `xnd_production_`.
+2. Di **Settings → Webhooks**, salin **Verification Token** ke `XENDIT_CALLBACK_TOKEN=…`, lalu isi URL **Invoices paid** dengan `https://poonya.studio/api/webhooks/payment/xendit`.
+3. Customer diarahkan ke halaman checkout Xendit, lalu kembali ke `/booking/success` setelah bayar.
+
+### Midtrans
 
 1. Ambil key di dashboard Midtrans, di **Settings → Access Keys**. Untuk testing, pakai dashboard.sandbox.midtrans.com.
 2. **Server key** (`SB-Mid-server-…` untuk sandbox, `Mid-server-…` untuk produksi) diisi di `.env` sebagai `MIDTRANS_SERVER_KEY`.
-3. **Client key** dan mode **Sandbox/Production** diatur di panel admin, menu **Settings**. Halaman itu menampilkan peringatan merah kalau server key tidak cocok dengan mode yang dipilih.
+3. **Client key** (`Mid-client-…` / `SB-Mid-client-…`) dan mode **Sandbox/Production** diatur di panel admin, menu **Settings**. **Jangan pernah** mengisi Server Key di kolom Client Key, karena nilai Client Key dikirim ke browser semua pengunjung. Sistem otomatis menolak key yang mengandung "server".
 4. Di dashboard Midtrans, buka **Settings → Payment → Notification URL**, lalu isi:
    `https://poonya.studio/api/webhooks/payment/midtrans`
 
