@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\{DB, Notification};
 class Booking extends Model
 {
     protected $fillable = [
-        'user_id', 'studio_id', 'slot_id', 'order_id', 'status',
+        'user_id', 'studio_id', 'slot_id', 'promo_code_id', 'discount_amount', 'order_id', 'status',
         'customer_name', 'customer_email', 'customer_phone',
         'notes', 'expires_at', 'confirmed_at',
     ];
@@ -40,6 +40,22 @@ class Booking extends Model
     public function payment()
     {
         return $this->hasOne(Payment::class);
+    }
+
+    public function promoCode()
+    {
+        return $this->belongsTo(PromoCode::class);
+    }
+
+    /** Nothing left to pay (100% promo): confirm without a payment gateway. */
+    public function confirmFree(): void
+    {
+        DB::transaction(function () {
+            $this->update(['status' => 'confirmed', 'confirmed_at' => now()]);
+            $this->slot()->update(['status' => 'booked', 'locked_until' => null]);
+            $this->payment()->update(['gateway' => 'cash', 'method' => 'promo', 'status' => 'paid', 'paid_at' => now()]);
+            $this->sendConfirmation();
+        });
     }
 
     /** The payment gateway couldn't start a transaction — undo the booking so the slot frees up at once. */

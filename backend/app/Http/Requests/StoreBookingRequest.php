@@ -42,6 +42,7 @@ class StoreBookingRequest extends FormRequest
             'customer_email' => ['required', self::EMAIL_RULE, 'max:255'],
             'customer_phone' => ['required', 'string', self::PHONE_RULE],
             'notes'          => ['nullable', 'string', 'max:1000'],
+            'promo_code'     => ['nullable', 'string', 'max:32'],
         ];
     }
 

@@ -19,7 +19,7 @@ function useAdminStudios() {
 // ─── form helpers ─────────────────────────────────────────────────────────────
 
 const EMPTY_FORM = {
-  name: '', description: '', price: '', capacity: '',
+  name: '', description: '', price: '', weekend_price: '', capacity: '',
   features: '', color: '#7C3AED', is_active: true,
 }
 type FormState = typeof EMPTY_FORM
@@ -29,6 +29,7 @@ function fromStudio(s: Studio): FormState {
     name:        s.name,
     description: s.description,
     price:       String(s.price),
+    weekend_price: s.weekend_price ? String(s.weekend_price) : '',
     capacity:    String(s.capacity),
     features:    (s.features ?? []).join(', '),
     color:       s.color,
@@ -41,6 +42,7 @@ function buildFormData(form: FormState, thumbFile: File | null): FormData {
   fd.append('name',        form.name)
   fd.append('description', form.description)
   fd.append('price',       form.price)
+  fd.append('weekend_price', form.weekend_price) // empty = same as weekday
   fd.append('capacity',    form.capacity)
   fd.append('color',       form.color)
   fd.append('is_active',   form.is_active ? '1' : '0')
@@ -180,6 +182,11 @@ function StudioModal({ studio, onClose }: { studio: Studio | null; onClose: () =
               <input required type="number" min={0} value={form.price} onChange={e => set('price', e.target.value)} placeholder="75000" className={inputCls} />
             </div>
             <div>
+              <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1.5">Harga weekend (Rp)</label>
+              <input type="number" min={0} value={form.weekend_price} onChange={e => set('weekend_price', e.target.value)} placeholder="Sama" className={inputCls} />
+              <p className="text-[11px] font-semibold text-gray-400 mt-1">Sabtu & Minggu. Kosongkan jika sama.</p>
+            </div>
+            <div className="col-span-2">
               <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1.5">Kapasitas (orang)</label>
               <input required type="number" min={1} value={form.capacity} onChange={e => set('capacity', e.target.value)} placeholder="4" className={inputCls} />
             </div>
@@ -304,7 +311,9 @@ function StudioCard({
         <div className="flex items-end justify-between border-t-2 border-ink pt-3">
           <div>
             <p className="text-2xl font-extrabold text-ink">{formatIDR(studio.price)}</p>
-            <p className="text-[11px] font-bold text-gray-400">per sesi</p>
+            <p className="text-[11px] font-bold text-gray-400">
+              per sesi{studio.weekend_price ? ` · weekend ${formatIDR(studio.weekend_price)}` : ''}
+            </p>
           </div>
           <div className="flex items-center gap-1.5 text-gray-500 bg-surface-subtle border-2 border-ink rounded-xl px-3 py-1.5 shadow-cartoon-sm">
             <Users className="w-3.5 h-3.5" strokeWidth={2.5} />

@@ -24,6 +24,7 @@ Route::get('studios/{studio}', [StudioController::class, 'show']);
 Route::get('slots/available',  [SlotController::class, 'available']);
 Route::get('bookings/{booking}/status', [BookingController::class, 'status']);
 Route::get('bookings/order/{orderId}',  [BookingController::class, 'showByOrder']);
+Route::get('quote', [BookingController::class, 'quote'])->middleware('throttle:30,1');
 
 // Auth (admin/staff only — accounts are created from the Accounts page, no public sign-up)
 Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:login');
@@ -62,6 +63,8 @@ Route::middleware(['auth:sanctum', 'admin'])
             Route::patch('slots/{slot}/block',   [Admin\SlotController::class, 'block']);
             Route::patch('slots/{slot}/unblock', [Admin\SlotController::class, 'unblock']);
         });
+
+        Route::apiResource('promo-codes', Admin\PromoCodeController::class)->except(['show'])->middleware('permission:promos');
 
         Route::middleware('permission:settings')->group(function () {
             Route::get('settings', [Admin\SettingController::class, 'index']);

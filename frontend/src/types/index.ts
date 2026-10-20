@@ -4,6 +4,7 @@ export interface Studio {
   slug: string
   description: string
   price: number
+  weekend_price?: number | null
   capacity: number
   features: string[]
   thumbnail_url?: string
@@ -32,8 +33,19 @@ export interface BookingPayload {
 export interface BookingResponse {
   booking_id: number
   order_id: string
-  expires_at: string
-  payment_token: string
+  expires_at?: string
+  /** Absent when nothing is left to pay (100% promo) — then status is 'confirmed' */
+  payment_token?: string
+  status?: 'confirmed'
+}
+
+export interface Quote {
+  base_price: number
+  is_weekend: boolean
+  discount: number
+  total: number
+  promo: { code: string; label: string } | null
+  promo_error: string | null
 }
 
 export interface Booking {

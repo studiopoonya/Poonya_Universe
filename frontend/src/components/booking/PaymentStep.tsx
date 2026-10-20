@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { format, parseISO } from 'date-fns'
 import { id as idLocale } from 'date-fns/locale'
@@ -10,7 +11,7 @@ import { useStudios } from '@/hooks/useStudios'
 import { useBookingStatus } from '@/hooks/useBookingStatus'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import StepActions from '@/components/ui/StepActions'
-import type { BookingPayload, BookingResponse } from '@/types'
+import type { BookingPayload, BookingResponse, Quote } from '@/types'
 
 interface Props {
   booking: Partial<BookingPayload> & { time?: string }
@@ -34,16 +35,26 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
 
   const [loading, setLoading]         = useState(false)
   const [bookingResult, setResult]    = useState<BookingResponse | null>(null)
+  const [promoInput, setPromoInput]   = useState('')
+  const [promoCode, setPromoCode]     = useState('')   // code sent to /quote
+
+  // Server-side price (weekend price + promo) — the exact amount that will be charged
+  const { data: quote, isFetching: quoting } = useQuery<Quote>({
+    queryKey: ['quote', booking.studio_id, booking.slot_id, promoCode],
+    queryFn: () => api.get('/quote', { params: { studio_id: booking.studio_id, slot_id: booking.slot_id, promo_code: promoCode || undefined } }).then((r) => r.data),
+    enabled: !!booking.studio_id && !!booking.slot_id,
+  })
 
   const { data: statusData } = useBookingStatus(bookingResult?.booking_id ?? null)
 
   const handlePay = async () => {
     setLoading(true)
     try {
-      const res = await api.post<BookingResponse>('/bookings', booking)
+      const res = await api.post<BookingResponse>('/bookings', { ...booking, promo_code: quote?.promo?.code })
       setResult(res.data)
 
-      await pay(res.data.payment_token)
+      // 100% promo: already confirmed, nothing to pay (the status poll shows the success screen)
+      if (res.data.payment_token) await pay(res.data.payment_token)
     } catch (err: any) {
       const code = err.response?.data?.code
       if (err.response?.status === 429) {
@@ -121,9 +132,53 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
         <Row label="No. HP"  value={(booking as any).customer_phone ?? '—'} />
       </div>
 
-      <div className="flex items-center justify-between bg-brand-50 border border-brand-100 rounded-2xl px-4 md:px-5 py-4 mb-2 md:mb-6">
-        <span className="font-semibold text-gray-700">Total</span>
-        <span className="text-xl font-bold text-brand-600">{formatIDR(studio?.price ?? 0)}</span>
+      {/* Promo code */}
+      {!bookingResult && (
+        <div className="mb-4">
+          <div className="flex gap-2">
+            <input
+              value={promoInput}
+              onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+              placeholder="Kode promo (opsional)"
+              autoCapitalize="characters"
+              className="flex-1 min-w-0 px-4 py-3 rounded-xl bg-surface-subtle border border-transparent text-base md:text-sm font-semibold text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-brand-500 focus:bg-white uppercase"
+            />
+            <button
+              type="button"
+              disabled={!promoInput.trim() || quoting}
+              onClick={() => setPromoCode(promoInput.trim())}
+              className="shrink-0 px-4 rounded-xl border-2 border-ink bg-white text-sm font-extrabold text-ink shadow-cartoon-sm disabled:opacity-40"
+            >
+              Pakai
+            </button>
+          </div>
+          {promoCode && quote?.promo_error && <p className="text-red-500 text-xs mt-1.5">{quote.promo_error}</p>}
+          {quote?.promo && (
+            <p className="text-green-600 text-xs font-bold mt-1.5">
+              ✓ {quote.promo.code}: {quote.promo.label}{' '}
+              <button type="button" className="underline text-gray-400 ml-1" onClick={() => { setPromoCode(''); setPromoInput('') }}>hapus</button>
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="bg-brand-50 border border-brand-100 rounded-2xl px-4 md:px-5 py-4 mb-2 md:mb-6 space-y-1.5">
+        {quote && (quote.discount > 0 || quote.is_weekend) && (
+          <div className="flex items-center justify-between text-sm text-gray-500">
+            <span>Harga{quote.is_weekend ? ' weekend' : ''}</span>
+            <span>{formatIDR(quote.base_price)}</span>
+          </div>
+        )}
+        {quote && quote.discount > 0 && (
+          <div className="flex items-center justify-between text-sm text-green-600 font-semibold">
+            <span>Diskon</span>
+            <span>− {formatIDR(quote.discount)}</span>
+          </div>
+        )}
+        <div className="flex items-center justify-between">
+          <span className="font-semibold text-gray-700">Total</span>
+          <span className="text-xl font-bold text-brand-600">{quote ? formatIDR(quote.total) : '…'}</span>
+        </div>
       </div>
 
       {bookingResult && statusData?.status === 'pending' && (
@@ -139,11 +194,11 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
           </PrimaryButton>
         )}
         {!bookingResult ? (
-          <PrimaryButton loading={loading} onClick={handlePay}>
-            Bayar Sekarang
+          <PrimaryButton loading={loading} disabled={!quote || quoting} onClick={handlePay}>
+            {quote?.total === 0 ? 'Konfirmasi Booking' : 'Bayar Sekarang'}
           </PrimaryButton>
-        ) : (
-          <PrimaryButton onClick={() => pay(bookingResult.payment_token)}>
+        ) : bookingResult.payment_token && (
+          <PrimaryButton onClick={() => pay(bookingResult.payment_token!)}>
             Buka Kembali Pembayaran
           </PrimaryButton>
         )}

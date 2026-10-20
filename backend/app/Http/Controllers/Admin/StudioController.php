@@ -69,6 +69,7 @@ class StudioController extends Controller
             'name'        => ["{$sometimes}required", 'string', 'max:100'],
             'description' => ['nullable', 'string'],
             'price'       => ["{$sometimes}required", 'integer', 'min:0'],
+            'weekend_price' => ['nullable', 'integer', 'min:0'],
             'capacity'    => ['integer', 'min:1'],
             'features'    => ['nullable', 'array'],
             'thumbnail'   => ['nullable', 'image', 'mimes:jpeg,png,webp', 'max:5120'],

@@ -14,7 +14,8 @@ class PaymentGatewayService
             ->post($this->snapApiUrl(), [
                 'transaction_details' => [
                     'order_id'     => $booking->order_id,
-                    'gross_amount' => $booking->studio->price,
+                    // What was quoted and stored for this booking (weekend price / promo applied)
+                    'gross_amount' => $booking->payment->amount,
                 ],
                 'customer_details' => [
                     'first_name' => $booking->customer_name,

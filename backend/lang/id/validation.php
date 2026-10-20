@@ -69,5 +69,13 @@ return [
         'mail_from_address' => 'Email pengirim',
         'mail_from_name'    => 'Nama pengirim',
         'to'                => 'Email tujuan',
+        'weekend_price'     => 'Harga weekend',
+        'promo_code'        => 'Kode promo',
+        'code'              => 'Kode promo',
+        'type'              => 'Jenis diskon',
+        'value'             => 'Nilai diskon',
+        'max_uses'          => 'Kuota',
+        'starts_at'         => 'Tanggal mulai',
+        'ends_at'           => 'Tanggal berakhir',
     ],
 ];

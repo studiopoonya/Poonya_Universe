@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   ShieldOff,
+  Ticket,
 } from 'lucide-react'
 import api from '@/lib/axios'
 import toast from 'react-hot-toast'
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
   { to: '/admin/bookings', label: 'Bookings',  icon: CalendarCheck,              permission: 'bookings',  adminOnly: false },
   { to: '/admin/studios',  label: 'Studio',    icon: Store,                      permission: 'studios',   adminOnly: false },
   { to: '/admin/payment',  label: 'Payment',   icon: CreditCard,                 permission: 'payment',   adminOnly: false },
+  { to: '/admin/promos',   label: 'Promo',     icon: Ticket,                     permission: 'promos',    adminOnly: false },
   { to: '/admin/accounts', label: 'Accounts',  icon: Users,                      permission: 'accounts',  adminOnly: true  },
   { to: '/admin/email',    label: 'Email',     icon: Mail,                       permission: 'email',     adminOnly: true  },
   { to: '/admin/settings', label: 'Settings',  icon: Settings2,                  permission: 'settings',  adminOnly: false },

@@ -14,6 +14,7 @@ class Payment extends Model
     protected function casts(): array
     {
         return [
+            'amount'          => 'integer',
             'gateway_payload' => 'array',
             'paid_at'         => 'datetime',
         ];

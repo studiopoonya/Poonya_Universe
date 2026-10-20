@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreBookingRequest;
 use App\Jobs\ExpireBooking;
 use App\Models\{Booking, Payment, Slot, Studio};
-use App\Services\PaymentGatewayService;
+use App\Services\{PaymentGatewayService, Pricing};
 use Illuminate\Http\{JsonResponse, Request};
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -51,6 +51,7 @@ class BookingController extends Controller
             'customer_phone' => ['required', 'string', StoreBookingRequest::PHONE_RULE],
             'notes'          => ['nullable', 'string', 'max:1000'],
             'payment_method' => ['required', 'in:cash,qris'],
+            'promo_code'     => ['nullable', 'string', 'max:32'],
         ], [
             'customer_phone.regex' => 'Nomor HP tidak valid. Gunakan 8–15 angka, contoh 081234567890.',
         ]);
@@ -72,11 +73,16 @@ class BookingController extends Controller
                 Booking::where('slot_id', $slot->id)->where('status', 'pending')->update(['status' => 'expired']);
 
                 $studio  = Studio::findOrFail($data['studio_id']);
+                $quote   = Pricing::quote($studio, $slot, $data['promo_code'] ?? null);
+                abort_if($quote['promo_error'], 422, (string) $quote['promo_error']);
+
                 $orderId = 'WALKIN-' . strtoupper(Str::random(6)) . '-' . time();
 
                 $booking = Booking::create([
-                    'studio_id'      => $studio->id,
-                    'slot_id'        => $slot->id,
+                    'studio_id'       => $studio->id,
+                    'slot_id'         => $slot->id,
+                    'promo_code_id'   => $quote['promo']?->id,
+                    'discount_amount' => $quote['discount'],
                     'order_id'       => $orderId,
                     'status'         => 'pending',
                     'customer_name'  => $data['customer_name'],
@@ -89,7 +95,7 @@ class BookingController extends Controller
                 Payment::create([
                     'booking_id' => $booking->id,
                     'gateway'    => $data['payment_method'] === 'cash' ? 'cash' : 'midtrans',
-                    'amount'     => $studio->price,
+                    'amount'     => $quote['total'],
                     'currency'   => 'IDR',
                     'status'     => 'pending',
                 ]);
@@ -111,6 +117,13 @@ class BookingController extends Controller
                     'order_id'   => $booking->order_id,
                     'status'     => 'confirmed',
                 ], 201);
+            }
+
+            // Fully discounted: nothing to charge via QRIS
+            if ($booking->payment->amount === 0) {
+                $booking->confirmFree();
+
+                return response()->json(['booking_id' => $booking->id, 'order_id' => $booking->order_id, 'status' => 'confirmed'], 201);
             }
 
             // QRIS: generate Midtrans token

@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreBookingRequest;
 use App\Jobs\ExpireBooking;
 use App\Models\{Booking, Payment, Slot, Studio};
-use App\Services\PaymentGatewayService;
-use Illuminate\Http\JsonResponse;
+use App\Services\{PaymentGatewayService, Pricing};
+use Illuminate\Http\{JsonResponse, Request};
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -36,13 +36,18 @@ class BookingController extends Controller
                 Booking::where('slot_id', $slot->id)->where('status', 'pending')->update(['status' => 'expired']);
 
                 $studio  = Studio::findOrFail($data['studio_id']);
+                $quote   = Pricing::quote($studio, $slot, $data['promo_code'] ?? null);
+                abort_if($quote['promo_error'], 422, (string) $quote['promo_error']);
+
                 $orderId = 'ORD-' . strtoupper(Str::random(8)) . '-' . time();
 
                 $booking = Booking::create([
-                    'user_id'        => $request->user()?->id,
-                    'studio_id'      => $studio->id,
-                    'slot_id'        => $slot->id,
-                    'order_id'       => $orderId,
+                    'user_id'         => $request->user()?->id,
+                    'studio_id'       => $studio->id,
+                    'slot_id'         => $slot->id,
+                    'promo_code_id'   => $quote['promo']?->id,
+                    'discount_amount' => $quote['discount'],
+                    'order_id'        => $orderId,
                     'status'         => 'pending',
                     'customer_name'  => $data['customer_name'],
                     'customer_email' => $data['customer_email'],
@@ -54,13 +59,24 @@ class BookingController extends Controller
                 Payment::create([
                     'booking_id' => $booking->id,
                     'gateway'    => 'midtrans',
-                    'amount'     => $studio->price,
+                    'amount'     => $quote['total'],
                     'currency'   => 'IDR',
                     'status'     => 'pending',
                 ]);
 
                 return $booking;
             });
+
+            // 100% promo: nothing to pay, so confirm right away without Midtrans
+            if ($booking->payment->amount === 0) {
+                $booking->confirmFree();
+
+                return response()->json([
+                    'booking_id' => $booking->id,
+                    'order_id'   => $booking->order_id,
+                    'status'     => 'confirmed',
+                ], 201);
+            }
 
             ExpireBooking::dispatch($booking)->delay(now()->addMinutes(15));
 
@@ -89,6 +105,27 @@ class BookingController extends Controller
                 'code'    => 'SLOT_UNAVAILABLE',
             ], 409);
         }
+    }
+
+    /** Price for a slot (weekday/weekend) with an optional promo code, shown before paying. */
+    public function quote(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'studio_id'  => ['required', 'integer', 'exists:studios,id'],
+            'slot_id'    => ['required', 'integer', 'exists:slots,id'],
+            'promo_code' => ['nullable', 'string', 'max:32'],
+        ]);
+
+        $q = Pricing::quote(Studio::findOrFail($data['studio_id']), Slot::findOrFail($data['slot_id']), $data['promo_code'] ?? null);
+
+        return response()->json([
+            'base_price'  => $q['base_price'],
+            'is_weekend'  => $q['is_weekend'],
+            'discount'    => $q['discount'],
+            'total'       => $q['total'],
+            'promo'       => $q['promo'] ? ['code' => $q['promo']->code, 'label' => $q['promo']->label()] : null,
+            'promo_error' => $q['promo_error'],
+        ]);
     }
 
     public function status(Booking $booking): JsonResponse

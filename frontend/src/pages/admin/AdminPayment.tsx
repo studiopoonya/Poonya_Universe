@@ -7,7 +7,7 @@ import toast from 'react-hot-toast'
 import api from '@/lib/axios'
 import { openSnap } from '@/lib/snap'
 import { formatIDR } from '@/lib/utils'
-import type { Studio, Slot } from '@/types'
+import type { Studio, Slot, Quote } from '@/types'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -454,14 +454,24 @@ function StepPayment({
   const [result,     setResult]     = useState<BookingResult | null>(null)
   const [loading,    setLoading]    = useState(false)
   const [showCashModal, setShowCashModal] = useState(false)
+  const [promoInput, setPromoInput] = useState('')
+  const [promoCode,  setPromoCode]  = useState('')
+
+  // Same server-side pricing as online booking (weekend price + promo)
+  const { data: quote } = useQuery<Quote>({
+    queryKey: ['quote', data.studio_id, data.slot_id, promoCode],
+    queryFn: () => api.get('/quote', { params: { studio_id: data.studio_id, slot_id: data.slot_id, promo_code: promoCode || undefined } }).then((r) => r.data),
+  })
+  const price = quote?.total ?? studio?.price ?? 0
 
   const doSubmit = async () => {
     setLoading(true)
     try {
-      const res = await api.post<BookingResult>('/admin/bookings', { ...data, payment_method: method })
+      const res = await api.post<BookingResult>('/admin/bookings', { ...data, payment_method: method, promo_code: quote?.promo?.code })
       setResult(res.data)
 
-      if (method === 'cash') {
+      // Cash, or fully discounted (nothing to charge): already confirmed
+      if (method === 'cash' || res.data.status === 'confirmed') {
         toast.success(`Booking ${res.data.order_id} dikonfirmasi!`)
         setTimeout(onDone, 1800)
         return
@@ -528,10 +538,31 @@ function StepPayment({
           ))}
         </div>
 
+        {/* promo */}
+        <div>
+          <div className="flex gap-2">
+            <input
+              value={promoInput}
+              onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+              placeholder="Kode promo (opsional)"
+              className="flex-1 min-w-0 px-4 py-2.5 rounded-2xl border-2 border-ink text-sm font-semibold text-ink placeholder-gray-300 bg-white shadow-cartoon-sm uppercase focus:outline-none"
+            />
+            <button
+              type="button" disabled={!promoInput.trim()}
+              onClick={() => setPromoCode(promoInput.trim())}
+              className="shrink-0 px-4 rounded-2xl border-2 border-ink bg-white text-sm font-extrabold text-ink shadow-cartoon-sm disabled:opacity-40"
+            >
+              Pakai
+            </button>
+          </div>
+          {promoCode && quote?.promo_error && <p className="text-red-500 text-xs font-semibold mt-1.5">{quote.promo_error}</p>}
+          {quote?.promo && <p className="text-green-600 text-xs font-bold mt-1.5">✓ {quote.promo.code}: {quote.promo.label} (− {formatIDR(quote.discount)})</p>}
+        </div>
+
         {/* total */}
         <div className="flex items-center justify-between bg-brand-50 border-2 border-ink rounded-2xl shadow-cartoon-sm px-5 py-4">
-          <span className="font-extrabold text-ink">Total</span>
-          <span className="text-2xl font-extrabold text-brand-500">{formatIDR(studio?.price ?? 0)}</span>
+          <span className="font-extrabold text-ink">Total{quote?.is_weekend ? ' (weekend)' : ''}</span>
+          <span className="text-2xl font-extrabold text-brand-500">{formatIDR(price)}</span>
         </div>
 
         {/* method selector */}
@@ -586,7 +617,7 @@ function StepPayment({
       <AnimatePresence>
         {showCashModal && (
           <CashModal
-            price={studio?.price ?? 0}
+            price={price}
             onCancel={() => setShowCashModal(false)}
             onConfirm={() => { setShowCashModal(false); doSubmit() }}
           />

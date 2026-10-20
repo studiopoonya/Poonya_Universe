@@ -24,6 +24,7 @@ const PAGE_PERMS = [
   { key: 'bookings', label: 'Bookings' },
   { key: 'studios',  label: 'Studio'   },
   { key: 'payment',  label: 'Payment'  },
+  { key: 'promos',   label: 'Promo'    },
   { key: 'settings', label: 'Settings' },
 ]
 

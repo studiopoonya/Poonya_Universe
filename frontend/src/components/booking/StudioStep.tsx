@@ -73,6 +73,9 @@ export default function StudioStep({ onNext, initialValue }: Props) {
                     <div className="text-right shrink-0">
                       <p className="text-lg md:text-xl font-extrabold text-ink">{formatIDR(studio.price)}</p>
                       <p className="text-[10px] font-bold text-gray-400 mt-0.5">per sesi</p>
+                      {studio.weekend_price && studio.weekend_price !== studio.price && (
+                        <p className="text-[10px] font-bold text-amber-600 mt-0.5">Weekend {formatIDR(studio.weekend_price)}</p>
+                      )}
                       <p className="text-[10px] font-bold text-gray-400 mt-1">Max {studio.capacity} orang</p>
                       {isSelected && (
                         <motion.div
