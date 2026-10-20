@@ -14,7 +14,8 @@ class BookingFlowTest extends TestCase
 
         $res = $this->postJson('/api/bookings', $this->bookingPayload($slot))
             ->assertCreated()
-            ->assertJsonStructure(['booking_id', 'order_id', 'expires_at', 'payment_token']);
+            ->assertJsonStructure(['booking_id', 'order_id', 'expires_at', 'qr_string'])
+            ->assertJsonMissingPath('payment_token');
 
         $booking = Booking::find($res->json('booking_id'));
         $this->assertSame('pending', $booking->status);
@@ -80,14 +81,40 @@ class BookingFlowTest extends TestCase
         $this->assertSame('available', $slot->fresh()->status);
     }
 
-    public function test_midtrans_receives_the_stored_amount_and_an_absolute_finish_url(): void
+    public function test_midtrans_qris_charge_uses_the_stored_amount(): void
     {
         PromoCode::create(['code' => 'HEMAT', 'type' => 'fixed', 'value' => 10000, 'is_active' => true]);
         $b = $this->book($this->slot($this->studio()), ['promo_code' => 'hemat']);
 
-        Http::assertSent(fn ($req) => $req['transaction_details']['gross_amount'] === 40000
+        Http::assertSent(fn ($req) => str_ends_with($req->url(), '/v2/charge')
+            && $req['payment_type'] === 'qris'
+            && $req['transaction_details']['gross_amount'] === 40000
             && $req['transaction_details']['order_id'] === $b->order_id
+            && $req['custom_expiry']['expiry_duration'] === 15);
+    }
+
+    public function test_falls_back_to_the_snap_popup_when_qris_is_not_activated(): void
+    {
+        $this->qrisAvailable = false;
+
+        $this->postJson('/api/bookings', $this->bookingPayload($this->slot($this->studio())))
+            ->assertCreated()->assertJson(['payment_token' => 'snap-token'])->assertJsonMissingPath('qr_string');
+
+        Http::assertSent(fn ($req) => str_contains($req->url(), '/snap/v1/transactions')
             && str_starts_with($req['callbacks']['finish'], 'http://frontend.test/booking/success'));
+    }
+
+    public function test_status_poll_confirms_a_paid_booking_without_a_webhook(): void
+    {
+        $slot = $this->slot($this->studio());
+        $b = $this->book($slot);
+
+        $this->getJson("/api/bookings/{$b->id}/status")->assertJson(['status' => 'pending']);
+
+        $this->gatewayStatus = ['transaction_status' => 'settlement', 'payment_type' => 'qris', 'transaction_id' => 'trx-9'];
+        $this->app['cache']->store()->flush(); // the 5 s per-booking check throttle
+        $this->getJson("/api/bookings/{$b->id}/status")->assertJson(['status' => 'confirmed']);
+        $this->assertSame('booked', $slot->fresh()->status);
     }
 
     public function test_weekend_price_and_promo_quote(): void

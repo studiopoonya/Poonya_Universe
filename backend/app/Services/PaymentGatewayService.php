@@ -7,7 +7,8 @@ use Illuminate\Support\Facades\Http;
 
 /**
  * Online payments through the gateway chosen in admin Settings:
- *  - midtrans: Snap token, opened as a popup on the page
+ *  - midtrans: a QRIS charge (Core API) — we draw the QR on our own page; falls back
+ *              to a Snap popup token if QRIS isn't available on the account
  *  - xendit:   Invoice, the customer is redirected to Xendit's hosted checkout
  * Secret keys live in .env only (services.midtrans / services.xendit).
  */
@@ -48,13 +49,22 @@ class PaymentGatewayService
     /**
      * Start a payment with the active gateway (bookings and admin test charges).
      *
-     * @return array{provider: string, payment_token?: string, payment_url?: string}
+     * @return array{provider: string, qr_string?: string, expires_at?: string, payment_token?: string, payment_url?: string}
      */
     public function charge(string $orderId, int $amount, string $name, string $email, ?string $phone, string $description, string $finishUrl): array
     {
-        return self::provider() === 'xendit'
-            ? ['provider' => 'xendit', 'payment_url' => $this->xenditInvoice($orderId, $amount, $name, $email, $phone, $description, $finishUrl)]
-            : ['provider' => 'midtrans', 'payment_token' => $this->midtransSnap($orderId, $amount, $name, $email, $phone, $finishUrl)];
+        if (self::provider() === 'xendit') {
+            return ['provider' => 'xendit', 'payment_url' => $this->xenditInvoice($orderId, $amount, $name, $email, $phone, $description, $finishUrl)];
+        }
+
+        try {
+            return ['provider' => 'midtrans', ...$this->midtransQris($orderId, $amount, $name, $email, $phone)];
+        } catch (QrisUnavailable $e) {
+            // e.g. QRIS not enabled for Core API on this merchant — the Snap popup still works
+            report($e);
+
+            return ['provider' => 'midtrans', 'payment_token' => $this->midtransSnap($orderId, $amount, $name, $email, $phone, $finishUrl)];
+        }
     }
 
     /**
@@ -78,7 +88,7 @@ class PaymentGatewayService
         }
 
         $res  = Http::withBasicAuth((string) config('services.midtrans.server_key'), '')->timeout(10)
-            ->get((self::midtransIsProduction() ? 'https://api.midtrans.com' : 'https://api.sandbox.midtrans.com') . "/v2/{$orderId}/status");
+            ->get(self::midtransApiBase() . "/v2/{$orderId}/status");
         $body = $res->json() ?? [];
 
         // 404 = the customer hasn't picked a payment method in Snap yet
@@ -92,6 +102,48 @@ class PaymentGatewayService
     }
 
     // ── Midtrans ───────────────────────────────────────────────────────────
+
+    private static function midtransApiBase(): string
+    {
+        return self::midtransIsProduction() ? 'https://api.midtrans.com' : 'https://api.sandbox.midtrans.com';
+    }
+
+    /**
+     * QRIS charge via Core API: returns the QR payload to draw ourselves, so the
+     * customer sees the code straight away instead of Snap's method list.
+     * https://docs.midtrans.com/reference/qris
+     *
+     * @return array{qr_string: string, expires_at: string}
+     */
+    private function midtransQris(string $orderId, int $amount, string $name, string $email, ?string $phone): array
+    {
+        $response = Http::withBasicAuth(config('services.midtrans.server_key'), '')
+            ->timeout(15)
+            ->post(self::midtransApiBase() . '/v2/charge', [
+                'payment_type'        => 'qris',
+                'transaction_details' => ['order_id' => $orderId, 'gross_amount' => $amount],
+                'customer_details'    => array_filter(['first_name' => $name, 'email' => $email, 'phone' => $phone]),
+                'qris'                => ['acquirer' => 'gopay'],
+                'custom_expiry'       => ['expiry_duration' => self::PAY_WITHIN_MINUTES, 'unit' => 'minute'],
+            ]);
+
+        $body = $response->json() ?? [];
+
+        // Bad keys are a real error; anything else (e.g. channel not active) can fall back to Snap
+        if ($response->status() === 401 || ($body['status_code'] ?? null) === '401') {
+            throw new \RuntimeException('Midtrans error: ' . $response->body());
+        }
+        // Core API answers HTTP 200 with its own status_code; 201 = QRIS created
+        if (! $response->successful() || ($body['status_code'] ?? null) !== '201' || empty($body['qr_string'])) {
+            throw new QrisUnavailable('Midtrans QRIS: ' . $response->body());
+        }
+
+        $expires = isset($body['expiry_time'])
+            ? \Carbon\Carbon::parse($body['expiry_time'], 'Asia/Jakarta')
+            : now()->addMinutes(self::PAY_WITHIN_MINUTES);
+
+        return ['qr_string' => $body['qr_string'], 'expires_at' => $expires->toIso8601String()];
+    }
 
     private function midtransSnap(string $orderId, int $amount, string $name, string $email, ?string $phone, string $finishUrl): string
     {

@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreBookingRequest;
 use App\Jobs\ExpireBooking;
 use App\Models\{Booking, Payment, Slot, Studio};
-use App\Services\{PaymentGatewayService, Pricing, SlotBooker};
+use App\Services\{PaymentGatewayService, PaymentOutcome, Pricing, SlotBooker};
 use Illuminate\Http\{JsonResponse, Request};
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -193,6 +193,22 @@ class BookingController extends Controller
     {
         Booking::expireStale();
         $booking->refresh();
+
+        // Webhooks can't reach a laptop and can be late — while waiting on an online payment,
+        // also ask the gateway (at most every 5 s per booking)
+        if ($booking->status === 'pending' && in_array($booking->payment?->gateway, PaymentGatewayService::PROVIDERS, true)
+            && \Illuminate\Support\Facades\Cache::add("pay-check:{$booking->id}", true, 5)) {
+            try {
+                $s = $this->gateway->fetchStatus($booking->payment->gateway, $booking->order_id);
+                if ($s['outcome'] !== 'pending') {
+                    PaymentOutcome::apply($booking->order_id, (string) ($s['payload']['transaction_id'] ?? $s['payload']['id'] ?? ''), (string) $s['method'],
+                        $s['outcome'], strtolower((string) ($s['payload']['transaction_status'] ?? $s['payload']['status'] ?? '')) === 'cancel' ? 'cancelled' : 'expired', $s['payload']);
+                    $booking->refresh();
+                }
+            } catch (\Throwable $e) {
+                report($e); // fall back to the webhook
+            }
+        }
 
         return response()->json([
             'status'       => $booking->status,

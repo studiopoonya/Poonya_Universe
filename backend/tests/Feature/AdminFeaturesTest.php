@@ -111,7 +111,7 @@ class AdminFeaturesTest extends TestCase
         Setting::set('midtrans_is_production', true);
         $this->book($this->slot($this->studio()));
 
-        \Illuminate\Support\Facades\Http::assertSent(fn ($r) => $r->url() === 'https://app.midtrans.com/snap/v1/transactions');
+        \Illuminate\Support\Facades\Http::assertSent(fn ($r) => $r->url() === 'https://api.midtrans.com/v2/charge');
     }
 
     public function test_bookings_list_paginates_with_a_chosen_page_size(): void

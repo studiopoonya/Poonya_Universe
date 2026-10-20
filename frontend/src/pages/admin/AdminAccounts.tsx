@@ -71,7 +71,7 @@ function AccountModal({
     }))
 
   const mutation = useMutation({
-    mutationFn: (data: FormState) => {
+    mutationFn: async (data: FormState) => {
       const payload = {
         name:        data.name,
         email:       data.email,
@@ -80,8 +80,8 @@ function AccountModal({
         ...(data.password ? { password: data.password } : {}),
       }
       return isEdit
-        ? api.put(`/admin/accounts/${account.id}`, payload)
-        : api.post('/admin/accounts', { ...payload, password: data.password })
+        ? (await api.put(`/admin/accounts/${account.id}`, payload)).data
+        : (await api.post('/admin/accounts', { ...payload, password: data.password })).data
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'accounts'] })

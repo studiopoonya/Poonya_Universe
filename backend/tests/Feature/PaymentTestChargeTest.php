@@ -11,10 +11,11 @@ class PaymentTestChargeTest extends TestCase
     public function test_admin_creates_a_rp_100_midtrans_test_charge(): void
     {
         $res = $this->asUser($this->admin())->postJson('/api/admin/payment-test')
-            ->assertCreated()->assertJson(['amount' => 100, 'provider' => 'midtrans', 'payment_token' => 'snap-token']);
+            ->assertCreated()->assertJson(['amount' => 100, 'provider' => 'midtrans', 'qr_string' => '00020101021226QRISTEST'])
+            ->assertJsonStructure(['expires_at']);
 
         $this->assertStringStartsWith('TEST-', $res->json('order_id'));
-        Http::assertSent(fn ($r) => $r->method() === 'POST' && $r['transaction_details']['gross_amount'] === 100);
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/v2/charge') && $r['transaction_details']['gross_amount'] === 100);
     }
 
     public function test_status_is_read_from_the_gateway_without_a_webhook(): void

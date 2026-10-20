@@ -5,11 +5,14 @@ import toast from 'react-hot-toast'
 import api from '@/lib/axios'
 import { openSnap } from '@/lib/snap'
 import { formatIDR } from '@/lib/utils'
+import QrisPanel from '@/components/ui/QrisPanel'
 
 interface TestCharge {
   order_id: string
   amount: number
   provider: 'midtrans' | 'xendit'
+  qr_string?: string
+  expires_at?: string
   payment_token?: string
   payment_url?: string
 }
@@ -120,11 +123,19 @@ export default function PaymentTestCard({ gatewayLabel }: { gatewayLabel: string
             <>
               <p className="text-sm font-extrabold text-amber-800 animate-pulse">⏳ Menunggu pembayaran {formatIDR(charge.amount)}…</p>
               <p className="text-xs font-semibold text-amber-700 mt-1">
-                {charge.payment_url ? 'Halaman checkout Xendit dibuka di tab baru.' : 'Pilih QRIS di popup Midtrans, lalu scan dengan e-wallet / m-banking.'} Status dicek otomatis setiap 3 detik.
+                {charge.qr_string ? 'Scan QR di bawah dengan e-wallet / m-banking.'
+                  : charge.payment_url ? 'Halaman checkout Xendit dibuka di tab baru.'
+                  : 'Pilih QRIS di popup Midtrans, lalu scan dengan e-wallet / m-banking.'} Status dicek otomatis setiap 3 detik.
               </p>
-              <button onClick={reopen} className="mt-3 inline-flex items-center gap-1.5 text-xs font-extrabold text-brand-600">
-                <ExternalLink className="w-3.5 h-3.5" /> Buka lagi halaman pembayaran
-              </button>
+              {charge.qr_string ? (
+                <div className="mt-4">
+                  <QrisPanel qrString={charge.qr_string} expiresAt={charge.expires_at} orderId={charge.order_id} />
+                </div>
+              ) : (
+                <button onClick={reopen} className="mt-3 inline-flex items-center gap-1.5 text-xs font-extrabold text-brand-600">
+                  <ExternalLink className="w-3.5 h-3.5" /> Buka lagi halaman pembayaran
+                </button>
+              )}
             </>
           )}
           <p className="text-[10px] font-mono text-gray-400 mt-2">{charge.order_id}</p>

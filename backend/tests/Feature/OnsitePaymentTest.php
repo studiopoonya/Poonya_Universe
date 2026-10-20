@@ -113,7 +113,7 @@ class OnsitePaymentTest extends TestCase
         $b = $this->reserve($slot, ['customer_email' => 'Up@Example.com']);
 
         $this->postJson('/api/bookings/pay-online', ['order_id' => $b->order_id, 'email' => 'up@example.com'])
-            ->assertOk()->assertJsonStructure(['payment_token']);
+            ->assertOk()->assertJsonStructure(['qr_string', 'expires_at']);
 
         $this->assertSame('pending', $b->fresh()->status);
         $this->assertSame('midtrans', $b->payment->fresh()->gateway);

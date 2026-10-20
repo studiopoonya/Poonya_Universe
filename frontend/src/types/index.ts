@@ -35,7 +35,9 @@ export interface BookingResponse {
   booking_id: number
   order_id: string
   expires_at?: string
-  /** Midtrans: Snap popup token. Absent when nothing is left to pay (100% promo) */
+  /** Midtrans QRIS payload — drawn as a QR on our page. Absent when nothing is left to pay (100% promo) */
+  qr_string?: string
+  /** Midtrans fallback when QRIS isn't available: Snap popup token */
   payment_token?: string
   /** Xendit: hosted checkout page to send the customer to */
   payment_url?: string

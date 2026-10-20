@@ -29,6 +29,9 @@ abstract class TestCase extends BaseTestCase
     /** What a gateway status lookup (GET) returns; null = transaction not started yet (404). */
     protected ?array $gatewayStatus = null;
 
+    /** false = Midtrans says QRIS isn't activated, so we fall back to the Snap popup. */
+    protected bool $qrisAvailable = true;
+
     /** One fake for the whole test; flip $gatewayUp / $gatewayStatus to change it (later fakes don't override). */
     protected function midtransUp(): void
     {
@@ -38,6 +41,12 @@ abstract class TestCase extends BaseTestCase
                 return $this->gatewayStatus === null
                     ? Http::response(['status_code' => '404', 'status_message' => "Transaction doesn't exist."], 404)
                     : Http::response($this->gatewayStatus, 200);
+            }
+
+            if (str_ends_with($r->url(), '/v2/charge')) {
+                return Http::response($this->qrisAvailable
+                    ? ['status_code' => '201', 'transaction_status' => 'pending', 'qr_string' => '00020101021226QRISTEST', 'expiry_time' => now()->addMinutes(15)->format('Y-m-d H:i:s')]
+                    : ['status_code' => '402', 'status_message' => 'Payment channel is not activated.'], 200);
             }
 
             return Http::response(['token' => 'snap-token', 'invoice_url' => 'https://checkout-staging.xendit.co/web/inv-123'], 201);

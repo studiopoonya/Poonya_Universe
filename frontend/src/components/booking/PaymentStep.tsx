@@ -12,6 +12,7 @@ import { useStudios } from '@/hooks/useStudios'
 import { useBookingStatus } from '@/hooks/useBookingStatus'
 import PrimaryButton from '@/components/ui/PrimaryButton'
 import StepActions from '@/components/ui/StepActions'
+import QrisPanel from '@/components/ui/QrisPanel'
 import type { BookingPayload, BookingResponse, Quote } from '@/types'
 
 interface Props {
@@ -144,6 +145,25 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
           {expired ? 'Booking kamu kadaluarsa dan slot sudah dilepas.' : 'Pembayaran dibatalkan atau ditolak.'} Silakan pilih jadwal lagi.
         </p>
         <PrimaryButton onClick={onRestart}>Pilih Jadwal Lagi</PrimaryButton>
+      </motion.div>
+    )
+  }
+
+  // QRIS: show the code right here; the status poll flips to the success screen once paid
+  if (bookingResult?.qr_string && statusData?.status !== 'confirmed') {
+    return (
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="py-2">
+        <h2 className="text-xl font-extrabold text-ink text-center mb-1">Scan untuk Bayar</h2>
+        <p className="text-xs text-gray-400 font-semibold text-center mb-4">
+          {studio?.name}{booking.time ? ` · ${booking.time} WIB` : ''} · <span className="font-mono">{bookingResult.order_id}</span>
+        </p>
+        <QrisPanel
+          qrString={bookingResult.qr_string} amount={quote?.total}
+          expiresAt={bookingResult.expires_at} orderId={bookingResult.order_id}
+        />
+        <p className="text-center text-xs font-bold text-amber-700 mt-4 animate-pulse">
+          ⏳ Menunggu pembayaran… halaman ini otomatis berubah setelah kamu bayar.
+        </p>
       </motion.div>
     )
   }

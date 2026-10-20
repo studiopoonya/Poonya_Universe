@@ -3,10 +3,8 @@
 namespace App\Http\Controllers\Webhook;
 
 use App\Http\Controllers\Controller;
-use App\Models\{Booking, Payment, PaymentTest};
-use App\Services\PaymentGatewayService;
+use App\Services\{PaymentGatewayService, PaymentOutcome};
 use Illuminate\Http\{JsonResponse, Request};
-use Illuminate\Support\Facades\{DB, Log};
 
 class PaymentWebhookController extends Controller
 {
@@ -28,7 +26,7 @@ class PaymentWebhookController extends Controller
 
         $status = strtolower((string) $payload['transaction_status']);
 
-        $this->handleTransaction(
+        PaymentOutcome::apply(
             orderId:    $payload['order_id'],
             gatewayRef: $payload['transaction_id'],
             method:     $payload['payment_type'],
@@ -55,7 +53,7 @@ class PaymentWebhookController extends Controller
         $payload = $request->all();
         $status  = strtoupper((string) ($payload['status'] ?? ''));
 
-        $this->handleTransaction(
+        PaymentOutcome::apply(
             orderId:    (string) ($payload['external_id'] ?? ''),
             gatewayRef: (string) ($payload['id'] ?? ''),
             method:     strtolower((string) ($payload['payment_method'] ?? $payload['payment_channel'] ?? 'xendit')),
@@ -66,82 +64,4 @@ class PaymentWebhookController extends Controller
 
         return response()->json(['message' => 'OK']);
     }
-
-    /**
-     * @param  string  $outcome     paid | failed | pending
-     * @param  string  $failStatus  booking status when the payment failed: expired | cancelled
-     */
-    private function handleTransaction(
-        string $orderId,
-        string $gatewayRef,
-        string $method,
-        string $outcome,
-        string $failStatus,
-        array  $rawPayload,
-    ): void {
-        // Admin "Tes Pembayaran" charges aren't bookings
-        if (str_starts_with($orderId, PaymentTest::PREFIX)) {
-            PaymentTest::where('order_id', $orderId)->first()?->record($outcome, $method, $rawPayload);
-            return;
-        }
-
-        DB::transaction(function () use ($orderId, $gatewayRef, $method, $outcome, $failStatus, $rawPayload) {
-
-            $booking = Booking::where('order_id', $orderId)
-                              ->lockForUpdate()
-                              ->firstOrFail();
-
-            // Idempotency guard: booking already settled one way or the other
-            if ($booking->status !== 'pending') {
-                if ($outcome === 'paid') {
-                    // A repeat notification for an already-confirmed booking needs nothing
-                    if ($booking->status === 'confirmed') return;
-
-                    // Money arrived after the booking expired/was cancelled — flag it for a refund
-                    $booking->payment()->update([
-                        'gateway_ref'     => $gatewayRef,
-                        'method'          => $method,
-                        'status'          => 'refund_pending',
-                        'paid_at'         => now(),
-                        'gateway_payload' => $rawPayload,
-                    ]);
-                    Log::warning('Payment received for non-pending booking', [
-                        'order_id' => $orderId,
-                        'status'   => $booking->status,
-                    ]);
-                }
-                return;
-            }
-
-            // Still waiting on the customer (e.g. QRIS/VA just issued) — record details, keep the slot locked
-            if ($outcome === 'pending') {
-                $booking->payment()->update([
-                    'gateway_ref'     => $gatewayRef,
-                    'method'          => $method,
-                    'gateway_payload' => $rawPayload,
-                ]);
-                return;
-            }
-
-            $isPaid = $outcome === 'paid';
-
-            $booking->payment()->update([
-                'gateway_ref'     => $gatewayRef,
-                'method'          => $method,
-                'status'          => $isPaid ? 'paid' : 'failed',
-                'gateway_payload' => $rawPayload,
-                'paid_at'         => $isPaid ? now() : null,
-            ]);
-
-            if ($isPaid) {
-                $booking->update(['status' => 'confirmed', 'confirmed_at' => now()]);
-                $booking->bookSlots();
-                $booking->sendConfirmation();
-            } else {
-                $booking->update(['status' => $failStatus]);
-                $booking->releaseSlots();
-            }
-        });
-    }
-
 }

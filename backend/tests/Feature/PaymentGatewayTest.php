@@ -64,7 +64,7 @@ class PaymentGatewayTest extends TestCase
     public function test_midtrans_remains_the_default(): void
     {
         $this->postJson('/api/bookings', $this->bookingPayload($this->slot($this->studio())))
-            ->assertCreated()->assertJson(['provider' => 'midtrans', 'payment_token' => 'snap-token']);
+            ->assertCreated()->assertJson(['provider' => 'midtrans', 'qr_string' => '00020101021226QRISTEST']);
     }
 
     public function test_server_key_is_refused_in_the_public_client_key_field(): void
