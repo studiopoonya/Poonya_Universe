@@ -22,12 +22,23 @@ class BookingController extends Controller
             $booking = DB::transaction(function () use ($data, $request) {
 
                 $sessions = (int) ($data['sessions'] ?? 1);
-                $slots    = SlotBooker::take((int) $data['studio_id'], (int) $data['slot_id'], $sessions, 'locked', 15);
+                $slots    = SlotBooker::run((int) $data['studio_id'], (int) $data['slot_id'], $sessions);
                 $slot     = $slots->first();
 
                 $studio  = Studio::findOrFail($data['studio_id']);
                 $quote   = Pricing::quote($studio, $slot, $data['promo_code'] ?? null, $sessions);
                 abort_if($quote['promo_error'], 422, (string) $quote['promo_error']);
+
+                // Pay at the studio: a reservation that does NOT lock the slots (nothing to pay → treat as online)
+                $onsite = ($data['payment_method'] ?? 'online') === 'onsite' && $quote['total'] > 0;
+                if ($onsite) {
+                    abort_if(SlotBooker::hasOnsiteReservation($slots), response()->json([
+                        'message' => 'Jam ini sudah direservasi orang lain untuk bayar di tempat. Bayar via QRIS untuk langsung mengamankannya, atau pilih jam lain.',
+                        'code'    => 'SLOT_RESERVED',
+                    ], 409));
+                } else {
+                    $slots = SlotBooker::take((int) $data['studio_id'], (int) $data['slot_id'], $sessions, 'locked', 15);
+                }
 
                 $orderId = 'ORD-' . strtoupper(Str::random(8)) . '-' . time();
 
@@ -39,18 +50,21 @@ class BookingController extends Controller
                     'promo_code_id'   => $quote['promo']?->id,
                     'discount_amount' => $quote['discount'],
                     'order_id'        => $orderId,
-                    'status'         => 'pending',
+                    'status'         => $onsite ? 'onsite' : 'pending',
                     'customer_name'  => $data['customer_name'],
                     'customer_email' => $data['customer_email'],
                     'customer_phone' => $data['customer_phone'],
                     'notes'          => $data['notes'] ?? null,
-                    'expires_at'     => now()->addMinutes(15),
+                    // An onsite reservation lapses once its session is over
+                    'expires_at'     => $onsite
+                        ? \Carbon\Carbon::parse($slot->date . ' ' . $slot->start_time)->addMinutes(30 * $sessions)
+                        : now()->addMinutes(15),
                 ]);
                 SlotBooker::attach($booking, $slots);
 
                 Payment::create([
                     'booking_id' => $booking->id,
-                    'gateway'    => 'midtrans',
+                    'gateway'    => $onsite ? 'cash' : 'midtrans',
                     'amount'     => $quote['total'],
                     'currency'   => 'IDR',
                     'status'     => 'pending',
@@ -58,6 +72,16 @@ class BookingController extends Controller
 
                 return $booking;
             });
+
+            if ($booking->status === 'onsite') {
+                $booking->sendConfirmation('onsite');
+
+                return response()->json([
+                    'booking_id' => $booking->id,
+                    'order_id'   => $booking->order_id,
+                    'status'     => 'onsite',
+                ], 201);
+            }
 
             // 100% promo: nothing to pay, so confirm right away without Midtrans
             if ($booking->payment->amount === 0) {
@@ -97,6 +121,48 @@ class BookingController extends Controller
                 'code'    => 'SLOT_UNAVAILABLE',
             ], 409);
         }
+    }
+
+    /**
+     * Turn a pay-at-studio reservation into an online payment, locking its slots now.
+     * Offered right after reserving ("amankan jadwal sekarang"). Identified by Order ID + email.
+     */
+    public function payOnline(Request $request): JsonResponse
+    {
+        $data = $request->validate(['order_id' => ['required', 'string'], 'email' => ['required', 'email']]);
+
+        $booking = Booking::where('order_id', $data['order_id'])
+            ->whereRaw('LOWER(customer_email) = ?', [strtolower(trim($data['email']))])
+            ->firstOrFail();
+        abort_unless($booking->status === 'onsite', 422, 'Booking ini bukan reservasi bayar di tempat.');
+
+        try {
+            DB::transaction(function () use ($booking) {
+                SlotBooker::take($booking->studio_id, $booking->slot_id, $booking->sessions, 'locked', 15, exceptBookingId: $booking->id);
+                $booking->update(['status' => 'pending', 'expires_at' => now()->addMinutes(15)]);
+                $booking->payment()->update(['gateway' => 'midtrans']);
+            });
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            return response()->json(['message' => 'Jadwal ini baru saja diambil orang lain. Silakan pilih jam lain.', 'code' => 'SLOT_UNAVAILABLE'], 409);
+        }
+
+        ExpireBooking::dispatch($booking)->delay(now()->addMinutes(15));
+
+        try {
+            $token = $this->gateway->createTransaction($booking->fresh(['studio', 'payment']));
+        } catch (\Throwable $e) {
+            report($e);
+            // Back to a plain reservation rather than losing it
+            DB::transaction(function () use ($booking) {
+                $booking->releaseSlots();
+                $booking->update(['status' => 'onsite']);
+                $booking->payment()->update(['gateway' => 'cash']);
+            });
+
+            return response()->json(['message' => 'Pembayaran online sedang tidak bisa diproses. Reservasi bayar di tempat kamu tetap tercatat.', 'code' => 'PAYMENT_GATEWAY_ERROR'], 502);
+        }
+
+        return response()->json(['booking_id' => $booking->id, 'order_id' => $booking->order_id, 'payment_token' => $token]);
     }
 
     /** Price for a slot (weekday/weekend) with an optional promo code, shown before paying. */

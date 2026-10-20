@@ -8,7 +8,8 @@ export function useBookingStatus(bookingId: number | null) {
     enabled: !!bookingId,
     refetchInterval: (query) => {
       const status = query.state.data?.status
-      if (status === 'confirmed' || status === 'cancelled' || status === 'expired') return false
+      // 'onsite' waits at the studio — nothing to poll (an upgrade to online re-fetches)
+      if (status === 'confirmed' || status === 'cancelled' || status === 'expired' || status === 'onsite') return false
       return 2000
     },
   })

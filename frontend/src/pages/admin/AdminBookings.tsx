@@ -25,6 +25,7 @@ type ActionType = 'cancel' | 'confirm'
 
 const STATUS: Record<string, { bg: string; text: string; label: string; border: string }> = {
   pending:   { bg: 'bg-amber-50',  text: 'text-amber-600', border: 'border-amber-300', label: 'Menunggu'     },
+  onsite:    { bg: 'bg-sky-50',    text: 'text-sky-600',   border: 'border-sky-300',   label: 'Bayar di Tempat' },
   confirmed: { bg: 'bg-green-50',  text: 'text-green-600', border: 'border-green-300', label: 'Dikonfirmasi' },
   cancelled: { bg: 'bg-red-50',    text: 'text-red-500',   border: 'border-red-300',   label: 'Dibatalkan'   },
   expired:   { bg: 'bg-gray-100',  text: 'text-gray-400',  border: 'border-gray-200',  label: 'Expired'      },
@@ -115,6 +116,7 @@ function ActionModal({
 const STATUS_OPTIONS = [
   { value: '',          label: 'Semua Status'  },
   { value: 'pending',   label: 'Menunggu'      },
+  { value: 'onsite',    label: 'Bayar di Tempat' },
   { value: 'confirmed', label: 'Dikonfirmasi'  },
   { value: 'cancelled', label: 'Dibatalkan'    },
   { value: 'expired',   label: 'Expired'       },
@@ -314,15 +316,15 @@ export default function AdminBookings() {
                       Sudah Refund
                     </button>
                   )}
-                  {b.status === 'pending' && (
+                  {(b.status === 'pending' || b.status === 'onsite') && (
                     <button
                       onClick={() => setActionTarget({ action: 'confirm', booking: b })}
                       className="flex items-center gap-1 text-xs font-extrabold text-green-600 border-2 border-green-400 bg-green-50 px-2.5 py-1.5 rounded-xl hover:bg-green-100 shadow-[2px_2px_0_#4ade80] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[3px_3px_0_#4ade80] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all duration-100"
                     >
-                      <CheckCircle className="w-3.5 h-3.5" strokeWidth={2.5} /> OK
+                      <CheckCircle className="w-3.5 h-3.5" strokeWidth={2.5} /> {b.status === 'onsite' ? 'Sudah Bayar' : 'OK'}
                     </button>
                   )}
-                  {(b.status === 'pending' || b.status === 'confirmed') && (
+                  {(b.status === 'pending' || b.status === 'onsite' || b.status === 'confirmed') && (
                     <button
                       onClick={() => setActionTarget({ action: 'cancel', booking: b })}
                       className="flex items-center gap-1 text-xs font-extrabold text-red-500 border-2 border-red-300 bg-red-50 px-2.5 py-1.5 rounded-xl hover:bg-red-100 shadow-[2px_2px_0_#fca5a5] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[3px_3px_0_#fca5a5] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all duration-100"

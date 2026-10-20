@@ -3,8 +3,9 @@
 namespace App\Services;
 
 use App\Models\{Booking, Slot};
+use App\Notifications\OnsiteReservationCancelled;
 use Illuminate\Database\Eloquent\{Collection, ModelNotFoundException};
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\{DB, Notification};
 
 /**
  * Takes a run of consecutive slots for one booking (1 session = 1 slot of 30 min).
@@ -13,12 +14,14 @@ use Illuminate\Support\Facades\DB;
 class SlotBooker
 {
     /**
-     * @param  string  $status  'locked' while waiting for payment, 'booked' when already paid
+     * The run of `$sessions` slots starting at `$startSlotId`, checked to be free,
+     * back to back and inside opening hours. Locks the rows but changes nothing.
+     *
      * @return Collection<int, Slot>  the slots, in time order
      *
-     * @throws ModelNotFoundException  a slot in the range was just taken (→ 409)
+     * @throws ModelNotFoundException  a slot in the range is taken (→ 409)
      */
-    public static function take(int $studioId, int $startSlotId, int $sessions, string $status, ?int $lockMinutes = null, bool $allowStarted = false): Collection
+    public static function run(int $studioId, int $startSlotId, int $sessions, bool $allowStarted = false): Collection
     {
         $start = Slot::whereKey($startSlotId)->lockForUpdate()->firstOrFail();
 
@@ -42,19 +45,49 @@ class SlotBooker
             throw (new ModelNotFoundException)->setModel(Slot::class);
         }
 
-        $ids = $slots->pluck('id')->all();
+        return $slots;
+    }
+
+    /**
+     * Take the run: mark it 'locked' (awaiting payment) or 'booked' (paid).
+     * Pending bookings whose lock lapsed and pay-at-studio reservations on these
+     * slots lose them — the reservation holders are emailed.
+     *
+     * @param  int|null  $exceptBookingId  a booking taking its own reserved slots (onsite → paid)
+     */
+    public static function take(int $studioId, int $startSlotId, int $sessions, string $status, ?int $lockMinutes = null, bool $allowStarted = false, ?int $exceptBookingId = null): Collection
+    {
+        $slots = self::run($studioId, $startSlotId, $sessions, $allowStarted);
+        $ids   = $slots->pluck('id')->all();
+
         Slot::whereIn('id', $ids)->update([
             'status'       => $status,
             'locked_until' => $lockMinutes ? now()->addMinutes($lockMinutes) : null,
         ]);
 
-        // Any pending booking still holding one of these slots let its lock lapse — retire it
-        Booking::where('status', 'pending')
-            ->where(fn ($q) => $q->whereIn('slot_id', $ids)
+        $holding = fn () => Booking::where(fn ($q) => $q->whereIn('slot_id', $ids)
                 ->orWhereIn('id', DB::table('booking_slot')->whereIn('slot_id', $ids)->select('booking_id')))
-            ->update(['status' => 'expired']);
+            ->when($exceptBookingId, fn ($q) => $q->whereKeyNot($exceptBookingId));
+
+        // A pending booking still holding one of these slots let its lock lapse — retire it
+        $holding()->where('status', 'pending')->update(['status' => 'expired']);
+
+        // Pay-at-studio reservations never held the slot: whoever pays first gets it
+        $holding()->where('status', 'onsite')->get()->each(function (Booking $b) {
+            $b->update(['status' => 'cancelled']);
+            Notification::route('mail', $b->customer_email)->notify(new OnsiteReservationCancelled($b));
+        });
 
         return $slots;
+    }
+
+    /** Active pay-at-studio reservation on any of these slots (only one is allowed per slot). */
+    public static function hasOnsiteReservation(Collection $slots, ?int $exceptBookingId = null): bool
+    {
+        return Booking::where('status', 'onsite')
+            ->whereIn('id', DB::table('booking_slot')->whereIn('slot_id', $slots->pluck('id'))->select('booking_id'))
+            ->when($exceptBookingId, fn ($q) => $q->whereKeyNot($exceptBookingId))
+            ->exists();
     }
 
     /** Record which slots a booking holds (first one also goes in bookings.slot_id). */

@@ -29,6 +29,7 @@ Route::get('quote', [BookingController::class, 'quote'])->middleware('throttle:3
 // Customer self-service: Order ID + email (throttled against guessing)
 Route::post('bookings/lookup',     [ManageBookingController::class, 'lookup'])->middleware('throttle:10,1');
 Route::post('bookings/reschedule', [ManageBookingController::class, 'reschedule'])->middleware('throttle:10,1');
+Route::post('bookings/pay-online', [BookingController::class, 'payOnline'])->middleware('throttle:bookings');
 
 // Auth (admin/staff only — accounts are created from the Accounts page, no public sign-up)
 Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:login');

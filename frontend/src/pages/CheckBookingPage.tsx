@@ -12,7 +12,7 @@ import { durationLabel } from '@/lib/sessions'
 
 interface LookupResult {
   order_id: string
-  status: 'pending' | 'confirmed' | 'cancelled' | 'expired'
+  status: 'pending' | 'onsite' | 'confirmed' | 'cancelled' | 'expired'
   customer_name: string
   studio_id: number
   studio: string | null
@@ -29,6 +29,7 @@ interface LookupResult {
 const STATUS_LABEL: Record<LookupResult['status'], { text: string; cls: string }> = {
   confirmed: { text: 'Dikonfirmasi', cls: 'bg-green-100 text-green-700' },
   pending:   { text: 'Menunggu pembayaran', cls: 'bg-amber-100 text-amber-700' },
+  onsite:    { text: 'Bayar di tempat', cls: 'bg-sky-100 text-sky-700' },
   cancelled: { text: 'Dibatalkan', cls: 'bg-rose-100 text-rose-600' },
   expired:   { text: 'Kadaluarsa', cls: 'bg-gray-100 text-gray-500' },
 }
@@ -122,7 +123,7 @@ export default function CheckBookingPage() {
                     ].map(([label, value]) => value && (
                       <div key={label} className="flex justify-between items-start gap-4 py-2.5 border-b border-white last:border-0">
                         <span className="text-sm text-gray-400 shrink-0">{label}</span>
-                        <span className="text-sm font-semibold text-gray-900 text-right break-all">{value}</span>
+                        <span className="text-sm font-semibold text-gray-900 text-right min-w-0 [overflow-wrap:anywhere]">{value}</span>
                       </div>
                     ))}
                   </div>

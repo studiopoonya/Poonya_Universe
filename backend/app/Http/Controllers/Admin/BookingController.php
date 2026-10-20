@@ -202,11 +202,12 @@ class BookingController extends Controller
 
     public function cancel(Booking $booking): JsonResponse
     {
-        abort_if(! in_array($booking->status, ['pending', 'confirmed']), 422, 'Booking ini tidak bisa dibatalkan.');
+        abort_if(! in_array($booking->status, ['pending', 'onsite', 'confirmed']), 422, 'Booking ini tidak bisa dibatalkan.');
 
         $needsRefund = DB::transaction(function () use ($booking) {
+            $heldSlots = $booking->status !== 'onsite'; // onsite reservations never locked their slots
             $booking->update(['status' => 'cancelled']);
-            $booking->releaseSlots();
+            if ($heldSlots) $booking->releaseSlots();
 
             // The customer already paid — track the money until it's returned
             $paid = $booking->payment && $booking->payment->status === 'paid' && $booking->payment->amount > 0;
@@ -231,16 +232,30 @@ class BookingController extends Controller
     }
 
     /** Manually confirm a pending booking (e.g. after receiving cash). */
+    /**
+     * Manually confirm a booking: a pending one (e.g. paid outside Midtrans), or a
+     * pay-at-studio reservation when the customer arrives and pays cash.
+     */
     public function confirm(Booking $booking): JsonResponse
     {
-        abort_if($booking->status !== 'pending', 422, 'Only pending bookings can be confirmed.');
+        abort_if(! in_array($booking->status, ['pending', 'onsite']), 422, 'Hanya booking menunggu / bayar di tempat yang bisa dikonfirmasi.');
 
-        DB::transaction(function () use ($booking) {
-            $booking->update(['status' => 'confirmed', 'confirmed_at' => now()]);
-            $booking->bookSlots();
-            $booking->payment()->update(['status' => 'paid', 'paid_at' => now()]);
-            $booking->sendConfirmation();
-        });
+        try {
+            DB::transaction(function () use ($booking) {
+                if ($booking->status === 'onsite') {
+                    // Its slots were never locked: take them now, unless someone paid online first
+                    SlotBooker::take($booking->studio_id, $booking->slot_id, $booking->sessions, 'booked', allowStarted: true, exceptBookingId: $booking->id);
+                } else {
+                    $booking->bookSlots();
+                }
+
+                $booking->update(['status' => 'confirmed', 'confirmed_at' => now()]);
+                $booking->payment()->update(['status' => 'paid', 'paid_at' => now(), 'method' => $booking->payment->gateway === 'cash' ? 'cash' : $booking->payment->method]);
+                $booking->sendConfirmation();
+            });
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            return response()->json(['message' => 'Jadwal ini sudah diambil customer lain yang bayar online. Pilih jam lain untuk customer ini.'], 409);
+        }
 
         return response()->json(['message' => 'Booking dikonfirmasi.']);
     }

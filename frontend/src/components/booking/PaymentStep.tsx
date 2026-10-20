@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { format, parseISO } from 'date-fns'
 import { id as idLocale } from 'date-fns/locale'
@@ -25,7 +25,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between items-start gap-4 py-2.5 border-b border-surface-subtle last:border-0">
       <span className="text-sm text-gray-400 shrink-0">{label}</span>
-      <span className="text-sm font-semibold text-gray-900 text-right break-all">{value}</span>
+      <span className="text-sm font-semibold text-gray-900 text-right min-w-0 [overflow-wrap:anywhere]">{value}</span>
     </div>
   )
 }
@@ -38,6 +38,8 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
   const [bookingResult, setResult]    = useState<BookingResponse | null>(null)
   const [promoInput, setPromoInput]   = useState('')
   const [promoCode, setPromoCode]     = useState('')   // code sent to /quote
+  const [method, setMethod]           = useState<'online' | 'onsite'>('online')
+  const qc = useQueryClient()
 
   // Server-side price (weekend price + promo) — the exact amount that will be charged
   const { data: quote, isFetching: quoting } = useQuery<Quote>({
@@ -51,7 +53,7 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
   const handlePay = async () => {
     setLoading(true)
     try {
-      const res = await api.post<BookingResponse>('/bookings', { ...booking, promo_code: quote?.promo?.code })
+      const res = await api.post<BookingResponse>('/bookings', { ...booking, promo_code: quote?.promo?.code, payment_method: method })
       setResult(res.data)
 
       // 100% promo: already confirmed, nothing to pay (the status poll shows the success screen)
@@ -60,6 +62,9 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
       const code = err.response?.data?.code
       if (err.response?.status === 429) {
         toast.error('Terlalu banyak percobaan booking. Tunggu sebentar lalu coba lagi.')
+      } else if (code === 'SLOT_RESERVED') {
+        toast.error(err.response.data.message, { duration: 7000 })
+        setMethod('online')
       } else if (code === 'SLOT_UNAVAILABLE') {
         toast.error('Slot ini baru saja diambil orang lain. Pilih waktu lain.')
         onRestart()
@@ -71,11 +76,54 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
     }
   }
 
+  /** Reserved to pay at the studio → lock the slot now by paying online instead. */
+  const secureNow = async () => {
+    if (!bookingResult) return
+    setLoading(true)
+    try {
+      const res = await api.post<BookingResponse>('/bookings/pay-online', { order_id: bookingResult.order_id, email: booking.customer_email })
+      setResult(res.data)
+      await qc.invalidateQueries({ queryKey: ['booking-status', bookingResult.booking_id] }) // resume polling
+      if (res.data.payment_token) await pay(res.data.payment_token)
+    } catch (err: any) {
+      toast.error(err.response?.data?.message ?? 'Terjadi kesalahan. Silakan coba lagi.', { duration: 7000 })
+      if (err.response?.data?.code === 'SLOT_UNAVAILABLE') onRestart()
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const pay = (token: string) =>
     openSnap(token, {
       onError: () => toast.error('Pembayaran gagal. Silakan coba lagi.'),
       onClose: () => toast('Pembayaran belum selesai.', { icon: '⚠️' }),
     }).catch(() => toast.error('Gagal membuka halaman pembayaran. Periksa koneksi lalu coba lagi.'))
+
+  // Reserved to pay at the studio — the slot is NOT locked, so nudge toward paying now
+  const status = statusData?.status ?? (bookingResult?.status === 'onsite' ? 'onsite' : undefined)
+  if (status === 'onsite') {
+    return (
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-4">
+        <div className="w-16 h-16 rounded-2xl bg-amber-100 border-2 border-ink shadow-cartoon-sm flex items-center justify-center mx-auto mb-4 text-3xl">🧾</div>
+        <h2 className="text-xl font-extrabold text-ink mb-1">Reservasi Tercatat</h2>
+        <p className="text-sm text-gray-500 font-semibold">Bayar di studio saat kamu datang.</p>
+        <p className="text-sm font-extrabold text-ink font-mono mt-2">{bookingResult?.order_id}</p>
+
+        <div className="text-left bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 mt-5">
+          <p className="text-sm font-extrabold text-amber-800">⚠️ Jadwal kamu belum terkunci</p>
+          <p className="text-xs font-semibold text-amber-700 mt-1 leading-relaxed">
+            Kalau ada orang lain yang bayar online di jam yang sama lebih dulu, reservasi ini <strong>otomatis batal</strong>.
+            Bayar sekarang via QRIS supaya jadwal langsung jadi milikmu.
+          </p>
+        </div>
+
+        <div className="mt-5 space-y-2">
+          <PrimaryButton loading={loading} onClick={secureNow}>🔒 Amankan Sekarang via QRIS</PrimaryButton>
+          <p className="text-xs text-gray-400">Atau tutup halaman ini — detail reservasi sudah dikirim ke email kamu.</p>
+        </div>
+      </motion.div>
+    )
+  }
 
   // Payment window ran out, or the payment failed — the slot is released
   if (statusData?.status === 'expired' || statusData?.status === 'cancelled') {
@@ -187,6 +235,52 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
         </div>
       </div>
 
+      {/* Payment method: online locks the slot now; pay-at-studio does not */}
+      {!bookingResult && quote && quote.total > 0 && (
+        <div className="mb-4 mt-4 md:mt-0">
+          <p className="text-[11px] font-extrabold text-gray-400 uppercase tracking-wider mb-2">Metode Pembayaran</p>
+          <div className="space-y-2">
+            <button
+              type="button" onClick={() => setMethod('online')}
+              className={`relative w-full text-left rounded-2xl border-2 p-3.5 transition-all ${
+                method === 'online' ? 'border-brand-500 bg-brand-50 shadow-cartoon-sm' : 'border-ink/15 bg-white'
+              }`}
+            >
+              <span className="absolute -top-2.5 right-3 text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-green-500 text-white border-2 border-ink">
+                Disarankan
+              </span>
+              <div className="flex items-center gap-3">
+                <span className={`w-5 h-5 shrink-0 rounded-full border-2 ${method === 'online' ? 'border-brand-500 bg-brand-500 ring-2 ring-white ring-inset' : 'border-gray-300'}`} />
+                <div className="min-w-0">
+                  <p className="text-sm font-extrabold text-ink">📱 Bayar Sekarang via QRIS</p>
+                  <p className="text-xs font-semibold text-green-700 mt-0.5">✓ Jadwal langsung terkunci untukmu</p>
+                  <p className="text-xs font-semibold text-green-700">✓ Konfirmasi instan ke email</p>
+                </div>
+              </div>
+            </button>
+            <button
+              type="button" onClick={() => setMethod('onsite')}
+              className={`w-full text-left rounded-2xl border-2 p-3.5 transition-all ${
+                method === 'onsite' ? 'border-amber-400 bg-amber-50' : 'border-ink/15 bg-white'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <span className={`w-5 h-5 shrink-0 rounded-full border-2 ${method === 'onsite' ? 'border-amber-500 bg-amber-500 ring-2 ring-white ring-inset' : 'border-gray-300'}`} />
+                <div className="min-w-0">
+                  <p className="text-sm font-extrabold text-ink">💵 Bayar di Studio (Cash)</p>
+                  <p className="text-xs font-semibold text-gray-400 mt-0.5">Jadwal belum terkunci — bisa diambil orang lain yang bayar online lebih dulu</p>
+                </div>
+              </div>
+            </button>
+          </div>
+          {method === 'onsite' && (
+            <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mt-2">
+              ⚠️ Kalau jam ini dibayar online oleh orang lain, reservasimu otomatis batal. Mau aman? Pilih QRIS.
+            </p>
+          )}
+        </div>
+      )}
+
       {bookingResult && statusData?.status === 'pending' && (
         <p className="text-center text-xs text-gray-400 mb-3 animate-pulse">
           Menunggu konfirmasi pembayaran…
@@ -195,13 +289,13 @@ export default function PaymentStep({ booking, onBack, onRestart }: Props) {
 
       <StepActions>
         {!bookingResult && (
-          <PrimaryButton variant="ghost" onClick={onBack} className="w-auto px-5">
-            ← Kembali
+          <PrimaryButton variant="ghost" aria-label="Kembali" onClick={onBack} className="w-auto shrink-0 px-4">
+          ← <span className="hidden xs:inline">Kembali</span>
           </PrimaryButton>
         )}
         {!bookingResult ? (
           <PrimaryButton loading={loading} disabled={!quote || quoting} onClick={handlePay}>
-            {quote?.total === 0 ? 'Konfirmasi Booking' : 'Bayar Sekarang'}
+            {quote?.total === 0 ? 'Konfirmasi Booking' : method === 'onsite' ? 'Reservasi' : 'Bayar Sekarang'}
           </PrimaryButton>
         ) : bookingResult.payment_token && (
           <PrimaryButton onClick={() => pay(bookingResult.payment_token!)}>

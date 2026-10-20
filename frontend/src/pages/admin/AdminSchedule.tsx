@@ -9,7 +9,7 @@ import type { Studio } from '@/types'
 
 interface Hour { weekday: number; is_open: boolean; open_time: string; close_time: string }
 interface ClosedDate { id: number; date: string; reason: string | null }
-interface AdminSlot { id: number; start_time: string; end_time: string; status: string; customer: string | null }
+interface AdminSlot { id: number; start_time: string; end_time: string; status: string; customer: string | null; onsite?: boolean }
 
 const DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
 const ORDER = [1, 2, 3, 4, 5, 6, 0] // Monday first
@@ -174,7 +174,7 @@ function SlotBlockCard() {
                 key={s.id}
                 disabled={s.status === 'booked' || s.status === 'locked' || toggle.isPending}
                 onClick={() => toggle.mutate(s)}
-                title={s.customer ? `Dibooking: ${s.customer}` : undefined}
+                title={s.customer ? `${s.onsite ? 'Reservasi bayar di tempat' : 'Dibooking'}: ${s.customer}` : undefined}
                 className={`py-2.5 rounded-xl border-2 text-sm font-extrabold transition-colors ${style(s)}`}
               >
                 {s.start_time}

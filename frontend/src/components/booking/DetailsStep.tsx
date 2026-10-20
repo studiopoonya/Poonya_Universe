@@ -118,8 +118,8 @@ export default function DetailsStep({ onNext, onBack, initialValues }: Props) {
       </div>
 
       <StepActions>
-        <PrimaryButton variant="ghost" onClick={onBack} className="w-auto px-5">
-          ← Kembali
+        <PrimaryButton variant="ghost" aria-label="Kembali" onClick={onBack} className="w-auto shrink-0 px-4">
+          ← <span className="hidden xs:inline">Kembali</span>
         </PrimaryButton>
         <PrimaryButton onClick={handleSubmit}>
           Lanjut →

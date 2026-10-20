@@ -7,7 +7,7 @@ import api from '@/lib/axios'
 
 interface OrderSummary {
   order_id: string
-  status: 'pending' | 'confirmed' | 'cancelled' | 'expired'
+  status: 'pending' | 'onsite' | 'confirmed' | 'cancelled' | 'expired'
   studio: string | null
   date: string | null
   start_time: string | null
@@ -16,6 +16,7 @@ interface OrderSummary {
 
 const STATES = {
   confirmed: { icon: '🎉', title: 'Booking Dikonfirmasi!', desc: 'Pembayaran berhasil. Detail booking sudah dikirim ke email kamu.', bg: 'bg-green-100' },
+  onsite:    { icon: '🧾', title: 'Reservasi Bayar di Tempat', desc: 'Bayar di studio saat datang. Jadwal belum terkunci sampai kamu membayar.', bg: 'bg-sky-100' },
   pending:   { icon: '⏳', title: 'Menunggu Pembayaran',  desc: 'Kami sedang menunggu konfirmasi dari pembayaranmu. Halaman ini akan update otomatis.', bg: 'bg-amber-100' },
   expired:   { icon: '⌛', title: 'Booking Kadaluarsa',   desc: 'Waktu pembayaran sudah habis dan slot dilepas. Silakan booking ulang.', bg: 'bg-gray-100' },
   cancelled: { icon: '❌', title: 'Booking Dibatalkan',   desc: 'Pembayaran gagal atau dibatalkan. Silakan booking ulang.', bg: 'bg-rose-100' },
@@ -74,7 +75,7 @@ export default function BookingSuccessPage() {
               ].map(([label, value]) => value && (
                 <div key={label} className="flex justify-between items-start gap-4 py-2.5 border-b border-white last:border-0">
                   <span className="text-sm text-gray-400 shrink-0">{label}</span>
-                  <span className="text-sm font-semibold text-gray-900 text-right break-all">{value}</span>
+                  <span className="text-sm font-semibold text-gray-900 text-right min-w-0 [overflow-wrap:anywhere]">{value}</span>
                 </div>
               ))}
             </div>

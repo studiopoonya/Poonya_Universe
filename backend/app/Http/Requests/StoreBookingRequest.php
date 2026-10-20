@@ -43,6 +43,7 @@ class StoreBookingRequest extends FormRequest
             'customer_phone' => ['required', 'string', self::PHONE_RULE],
             'notes'          => ['nullable', 'string', 'max:1000'],
             'promo_code'     => ['nullable', 'string', 'max:32'],
+            'payment_method' => ['nullable', 'in:online,onsite'],
             'sessions'       => ['nullable', 'integer', 'between:1,' . \App\Models\Booking::MAX_SESSIONS],
         ];
     }

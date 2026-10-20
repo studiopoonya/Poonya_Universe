@@ -6,6 +6,8 @@ export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      // Small phones (iPhone SE / 360px Androids) vs everything wider
+      screens: { xs: '380px' },
       fontFamily: {
         sans: ['"Nunito"', ...fontFamily.sans],
       },

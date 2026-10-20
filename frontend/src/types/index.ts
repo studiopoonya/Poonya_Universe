@@ -37,7 +37,7 @@ export interface BookingResponse {
   expires_at?: string
   /** Absent when nothing is left to pay (100% promo) — then status is 'confirmed' */
   payment_token?: string
-  status?: 'confirmed'
+  status?: 'confirmed' | 'onsite'
 }
 
 export interface Quote {
@@ -54,7 +54,7 @@ export interface Quote {
 export interface Booking {
   id: number
   order_id: string
-  status: 'pending' | 'confirmed' | 'cancelled' | 'expired'
+  status: 'pending' | 'onsite' | 'confirmed' | 'cancelled' | 'expired'
   customer_name: string
   customer_email: string
   customer_phone: string

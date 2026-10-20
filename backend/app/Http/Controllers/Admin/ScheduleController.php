@@ -67,7 +67,7 @@ class ScheduleController extends Controller
             return $closed;
         });
 
-        $existing = Booking::whereIn('status', ['pending', 'confirmed'])
+        $existing = Booking::whereIn('status', ['pending', 'onsite', 'confirmed'])
             ->whereHas('slots', fn ($q) => $q->whereDate('date', $data['date']))
             ->count();
 
@@ -106,7 +106,7 @@ class ScheduleController extends Controller
         $slots = Slot::where('studio_id', $data['studio_id'])
             ->whereDate('date', $data['date'])
             ->orderBy('start_time')
-            ->with(['bookings' => fn ($q) => $q->whereIn('status', ['pending', 'confirmed'])->select('bookings.id', 'customer_name', 'status')])
+            ->with(['bookings' => fn ($q) => $q->whereIn('status', ['pending', 'onsite', 'confirmed'])->select('bookings.id', 'customer_name', 'status')])
             ->get()
             ->map(fn (Slot $s) => [
                 'id'         => $s->id,
@@ -114,6 +114,7 @@ class ScheduleController extends Controller
                 'end_time'   => substr($s->end_time, 0, 5),
                 'status'     => $s->status,
                 'customer'   => $s->bookings->first()?->customer_name,
+                'onsite'     => $s->bookings->first()?->status === 'onsite', // reserved, not locked
             ]);
 
         return response()->json($slots);

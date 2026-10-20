@@ -24,10 +24,10 @@ class PromoCode extends Model
         return $this->hasMany(Booking::class);
     }
 
-    /** Uses = bookings holding the code that are still alive (pending or confirmed). */
+    /** Uses = bookings holding the code that are still alive (pending, onsite or confirmed). */
     public function usedCount(): int
     {
-        return $this->bookings()->whereIn('status', ['pending', 'confirmed'])->count();
+        return $this->bookings()->whereIn('status', ['pending', 'onsite', 'confirmed'])->count();
     }
 
     /** Why the code can't be used right now, or null when it can. */

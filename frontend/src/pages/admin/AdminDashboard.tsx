@@ -25,6 +25,7 @@ const THIS_MONTH = format(new Date(), 'yyyy-MM')
 const STATUS_BADGE: Record<string, { bg: string; text: string; label: string }> = {
   confirmed: { bg: 'bg-green-50',  text: 'text-green-600',  label: 'Dikonfirmasi' },
   pending:   { bg: 'bg-amber-50',  text: 'text-amber-600',  label: 'Menunggu'     },
+  onsite:    { bg: 'bg-sky-50',    text: 'text-sky-600',    label: 'Bayar di Tempat' },
   cancelled: { bg: 'bg-red-50',    text: 'text-red-500',    label: 'Dibatalkan'   },
   expired:   { bg: 'bg-gray-100',  text: 'text-gray-400',   label: 'Expired'      },
 }

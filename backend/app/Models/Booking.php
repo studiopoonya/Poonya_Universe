@@ -116,6 +116,8 @@ class Booking extends Model
      */
     public static function expireStale(): void
     {
+        static::where('status', 'onsite')->where('expires_at', '<', now())->update(['status' => 'expired']);
+
         static::where('status', 'pending')->where('expires_at', '<', now())->pluck('id')
             ->each(fn ($id) => DB::transaction(function () use ($id) {
                 $booking = static::whereKey($id)->where('status', 'pending')->lockForUpdate()->first();
@@ -127,9 +129,10 @@ class Booking extends Model
     }
 
     /** Email the confirmation to the address entered at checkout (most customers are guests). */
-    public function sendConfirmation(bool $rescheduled = false): void
+    /** @param  string  $kind  confirmed | rescheduled | onsite */
+    public function sendConfirmation(string $kind = 'confirmed'): void
     {
-        Notification::route('mail', $this->customer_email)->notify(new BookingConfirmed($this, $rescheduled));
+        Notification::route('mail', $this->customer_email)->notify(new BookingConfirmed($this, $kind));
     }
 
     public const RESCHEDULE_MIN_HOURS = 24;
