@@ -10,6 +10,23 @@ Dua domain, satu repo:
 Folder kode di server: `/www/wwwroot/selfstudio` (isi repo: `backend/` + `frontend/`).
 PHP: **8.2** (CLI: `/www/server/php/82/bin/php`).
 
+> **Server ini memakai OpenLiteSpeed, bukan Nginx.** Port 80/443 dilayani LiteSpeed
+> (`/usr/local/lsws`). Pengaturan situs lewat aaPanel (Directory, SSL, URL rewrite) masuk ke
+> config Nginx yang tidak dipakai, dan simpanannya gagal karena `nginx -t` error di situs lain.
+> Jadi **jangan ubah situs selfstudio lewat aaPanel**. Yang sudah dipasang (21 Okt 2026):
+>
+> - `httpd_config.conf`: `map` kedua domain di bawah `map new-apps...` (listener 80 dan 443) +
+>   `include .../openlitespeed/{selfstudio,api.selfstudio}.studiopoonya.net.conf`
+>   (backup: `httpd_config.conf.bak-sebelum-selfstudio`, skrip: `/root/fix-selfstudio-ols.sh`).
+> - Vhost API: `vhRoot /www/wwwroot/selfstudio/backend`, `docRoot $VH_ROOT/public/`.
+>   Website: `vhRoot /www/wwwroot/selfstudio/frontend/dist`.
+> - Rewrite lewat `.htaccess` (`autoLoadHtaccess 1`): `backend/public/.htaccess` (Laravel) dan
+>   `frontend/public/.htaccess` (SPA, ikut ter-copy ke `dist` saat build). Keduanya memaksa HTTPS.
+> - SSL: API = Let's Encrypt (DNS TXT manual, habis 19 Jan 2027). Website = wildcard
+>   `*.studiopoonya.net` (habis 18 Nov 2026), harus diperbarui sebelum tanggal itu.
+> - Setelah mengubah `.htaccess` atau config LiteSpeed: `/usr/local/lsws/bin/lswsctrl restart` (graceful).
+> - Bagian 5 (Nginx) di bawah **tidak berlaku** untuk server ini.
+
 ---
 
 ## 0. Persiapan (sekali saja)
@@ -164,7 +181,11 @@ $P artisan config:cache && $P artisan route:cache && $P artisan view:cache
 $P artisan queue:restart
 cd ../frontend && npm ci && npm run build
 chown -R www:www /www/wwwroot/selfstudio
+/usr/local/lsws/bin/lswsctrl restart     # LiteSpeed: reload .htaccess
 ```
+
+Kalau git menolak dengan pesan *dubious ownership* (repo dimiliki `www`), jalankan sekali:
+`git config --global --add safe.directory /www/wwwroot/selfstudio`
 
 ## Kalau ada masalah
 
