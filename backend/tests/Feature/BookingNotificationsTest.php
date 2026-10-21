@@ -86,4 +86,25 @@ class BookingNotificationsTest extends TestCase
         $this->assertNull($later->fresh()->reminded_at);
         $this->assertNull(Booking::find($unpaid->id)->reminded_at);
     }
+
+    public function test_notify_address_can_be_saved_while_smtp_comes_from_env(): void
+    {
+        $admin = $this->admin();
+        $this->asUser($admin)->putJson('/api/admin/mail-settings', ['mail_host' => '', 'mail_from_address' => '', 'admin_notify_email' => 'owner@studio.test'])
+            ->assertOk();
+        $this->assertSame('owner@studio.test', Setting::get('admin_notify_email'));
+
+        $this->asUser($admin)->putJson('/api/admin/mail-settings', ['mail_host' => 'smtp.gmail.com'])
+            ->assertUnprocessable()->assertJsonValidationErrors(['mail_port', 'mail_from_address']);
+    }
+
+    public function test_settings_page_reports_smtp_from_env(): void
+    {
+        config(['mail.default' => 'smtp', 'mail.mailers.smtp.host' => 'smtp.gmail.com', 'mail.mailers.smtp.username' => 'studio@gmail.com',
+            'mail.mailers.smtp.password' => 'app-password', 'mail.from.address' => 'studio@gmail.com']);
+
+        $this->asUser($this->admin())->getJson('/api/admin/mail-settings')
+            ->assertJsonPath('env_smtp', ['host' => 'smtp.gmail.com', 'from' => 'studio@gmail.com'])
+            ->assertJsonMissingPath('mail_password');
+    }
 }

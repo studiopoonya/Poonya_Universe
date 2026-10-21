@@ -18,6 +18,8 @@ interface MailForm {
 
 interface SavedMail extends Partial<Omit<MailForm, 'mail_password'>> {
   has_password: boolean
+  /** SMTP from the server's .env — used when the form isn't filled in */
+  env_smtp: { host: string; from: string } | null
 }
 
 const DEFAULTS: MailForm = {
@@ -59,7 +61,7 @@ export default function AdminEmail() {
 
   useEffect(() => {
     if (!saved) return
-    const { has_password, ...rest } = saved
+    const { has_password, env_smtp, ...rest } = saved
     const filled = Object.fromEntries(Object.entries(rest).filter(([, v]) => v != null && v !== ''))
     setForm({ ...DEFAULTS, ...filled, mail_port: String(rest.mail_port ?? DEFAULTS.mail_port), mail_password: '' })
   }, [saved])
@@ -83,7 +85,9 @@ export default function AdminEmail() {
     onError: (err: any) => toast.error(err.response?.data?.message ?? 'Gagal mengirim email tes.', { duration: 8000 }),
   })
 
-  const configured = !!saved?.mail_host && !!saved?.mail_from_address
+  const fromPanel  = !!saved?.mail_host && !!saved?.mail_from_address
+  const fromEnv    = !fromPanel && !!saved?.env_smtp
+  const configured = fromPanel || fromEnv
 
   return (
     <div className="max-w-xl">
@@ -102,13 +106,22 @@ export default function AdminEmail() {
           <div className="flex-1 min-w-0">
             <p className="font-extrabold text-ink">Akun SMTP</p>
             <p className="text-xs font-semibold text-gray-400 truncate">
-              {configured ? `Aktif: ${saved?.mail_from_address}` : 'Belum diatur — email belum terkirim ke customer'}
+              {fromPanel ? `Aktif: ${saved?.mail_from_address}`
+                : fromEnv ? `Aktif dari .env server: ${saved?.env_smtp?.from}`
+                : 'Belum diatur — email belum terkirim ke customer'}
             </p>
           </div>
           <span className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border-2 border-ink ${configured ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
             {configured ? 'Aktif' : 'Belum'}
           </span>
         </div>
+
+        {fromEnv && (
+          <p className="text-xs font-semibold text-green-700 bg-green-50 border-2 border-green-200 rounded-2xl px-3.5 py-2.5 mb-5">
+            ✓ Email sudah diatur lewat file <span className="font-mono">.env</span> di server ({saved?.env_smtp?.host}). Form di bawah boleh dikosongkan —
+            isi hanya kalau mau memakai akun lain.
+          </p>
+        )}
 
         {isLoading ? (
           <div className="space-y-4">

@@ -18,18 +18,25 @@ class MailSettingController extends Controller
         $s['has_password'] = (bool) MailSettings::password($s['mail_password']);
         unset($s['mail_password']);
 
+        // SMTP set up in the server's .env (used whenever the form above is left empty)
+        $s['env_smtp'] = config('mail.default') === 'smtp' && filled(config('mail.mailers.smtp.host'))
+            && filled(config('mail.mailers.smtp.username')) && filled(config('mail.mailers.smtp.password'))
+            ? ['host' => config('mail.mailers.smtp.host'), 'from' => config('mail.from.address')]
+            : null;
+
         return response()->json($s);
     }
 
     public function update(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'mail_host'         => ['required', 'string', 'max:255'],
-            'mail_port'         => ['required', 'integer', 'between:1,65535'],
-            'mail_encryption'   => ['required', 'in:tls,ssl'],
+            // All empty = use the SMTP from the server's .env
+            'mail_host'         => ['nullable', 'string', 'max:255'],
+            'mail_port'         => ['required_with:mail_host', 'nullable', 'integer', 'between:1,65535'],
+            'mail_encryption'   => ['required_with:mail_host', 'nullable', 'in:tls,ssl'],
             'mail_username'     => ['nullable', 'string', 'max:255'],
             'mail_password'     => ['nullable', 'string', 'max:255'], // empty = keep current
-            'mail_from_address' => ['required', 'email', 'max:255'],
+            'mail_from_address' => ['required_with:mail_host', 'nullable', 'email', 'max:255'],
             'mail_from_name'    => ['nullable', 'string', 'max:255'],
             'admin_notify_email' => ['nullable', 'string', 'max:500', function ($attr, $value, $fail) {
                 foreach (array_filter(array_map('trim', explode(',', (string) $value))) as $e) {
