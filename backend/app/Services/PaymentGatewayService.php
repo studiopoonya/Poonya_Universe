@@ -201,6 +201,20 @@ class PaymentGatewayService
         return filter_var(Setting::get('midtrans_is_production') ?? config('services.midtrans.is_production'), FILTER_VALIDATE_BOOLEAN);
     }
 
+    /**
+     * Client key for the browser (Snap fallback). Only ever returns a value shaped like a
+     * client key, so a server key pasted into the wrong place can never be published.
+     */
+    public static function midtransClientKey(): string
+    {
+        foreach ([Setting::get('midtrans_client_key'), config('services.midtrans.client_key')] as $key) {
+            $key = trim((string) $key);
+            if (preg_match('/^(SB-)?Mid-client-[A-Za-z0-9_-]+$/', $key)) return $key;
+        }
+
+        return '';
+    }
+
     /** snap.js for the chosen environment — derived, so it can't disagree with the API URL. */
     public static function midtransSnapJs(): string
     {

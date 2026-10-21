@@ -111,4 +111,20 @@ class PaymentGatewayTest extends TestCase
 
         \Illuminate\Support\Facades\Http::assertSent(fn ($r) => str_ends_with($r->url(), '/v2/charge') && ! $r->hasHeader('X-Append-Notification'));
     }
+
+    public function test_a_server_key_is_never_published_as_the_client_key(): void
+    {
+        config(['services.midtrans.client_key' => 'Mid-server-SECRET123']);
+        $this->getJson('/api/settings')->assertJsonPath('midtrans_client_key', '');
+
+        \App\Models\Setting::set('midtrans_client_key', 'SB-Mid-server-SECRET');
+        $this->getJson('/api/settings')->assertJsonPath('midtrans_client_key', '');
+        $this->asUser($this->admin())->getJson('/api/admin/settings')->assertJsonPath('midtrans_client_key', '');
+    }
+
+    public function test_client_key_falls_back_to_env(): void
+    {
+        config(['services.midtrans.client_key' => 'Mid-client-abc123']);
+        $this->getJson('/api/settings')->assertJsonPath('midtrans_client_key', 'Mid-client-abc123');
+    }
 }

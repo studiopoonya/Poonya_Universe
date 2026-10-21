@@ -10,7 +10,7 @@ use App\Models\Setting;
 // What the checkout needs to know (only public values: never a secret key)
 Route::get('settings', fn () => response()->json([
     'payment_gateway'     => \App\Services\PaymentGatewayService::provider(),
-    'midtrans_client_key' => (string) (Setting::get('midtrans_client_key') ?: config('services.midtrans.client_key')),
+    'midtrans_client_key' => \App\Services\PaymentGatewayService::midtransClientKey(), // never a server key
     'midtrans_snap_url'   => \App\Services\PaymentGatewayService::midtransSnapJs(),
 ]));
 
