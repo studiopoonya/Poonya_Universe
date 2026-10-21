@@ -5,6 +5,11 @@
 
     RewriteEngine On
 
+    # Live server: always HTTPS (localhost stays on http for development)
+    RewriteCond %{HTTPS} !=on
+    RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)(:[0-9]+)?$ [NC]
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]

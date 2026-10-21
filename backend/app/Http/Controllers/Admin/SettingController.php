@@ -17,7 +17,7 @@ class SettingController extends Controller
 
         return response()->json([
             'payment_gateway'        => PaymentGatewayService::provider(),
-            'midtrans_client_key'    => (string) Setting::get('midtrans_client_key'),
+            'midtrans_client_key'    => (string) (Setting::get('midtrans_client_key') ?: config('services.midtrans.client_key')),
             'midtrans_is_production' => PaymentGatewayService::midtransIsProduction() ? '1' : '0',
             'server_key_status'      => match (true) {
                 $key === ''                             => 'missing',
