@@ -1,70 +1,57 @@
 # Deploy ke VPS (aaPanel)
 
-Domain: **https://selfstudio.studiopoonya.net**. Frontend dan API ada di satu domain:
+Dua domain, satu repo:
 
-- `/` adalah React (hasil build `frontend/dist`)
-- `/api/...` adalah Laravel (`backend/public/index.php`)
-- `/storage/...` adalah foto studio yang di-upload
+| Domain | Isi | Root di aaPanel |
+|---|---|---|
+| **https://selfstudio.studiopoonya.net** | Website (React, hasil build) | `/www/wwwroot/selfstudio/frontend/dist` |
+| **https://api.selfstudio.studiopoonya.net** | API Laravel, webhook, foto studio | `/www/wwwroot/selfstudio/backend/public` |
 
-Karena satu domain, CORS tidak perlu diatur dan cukup satu sertifikat SSL.
-
-Folder di server: `/www/wwwroot/selfstudio` (isi repo: `backend/` + `frontend/`).
-PHP: **8.2** (CLI: `/www/server/php/82/bin/php`). Kalau pakai 8.3, ganti `82` jadi `83` di semua perintah.
+Folder kode di server: `/www/wwwroot/selfstudio` (isi repo: `backend/` + `frontend/`).
+PHP: **8.2** (CLI: `/www/server/php/82/bin/php`).
 
 ---
 
 ## 0. Persiapan (sekali saja)
 
-1. **DNS**: buat A record `selfstudio` ke IP VPS.
-2. **aaPanel → App Store**: pastikan **PHP 8.2**, **MySQL/MariaDB**, dan **Supervisor Manager** terpasang. Pasang juga **Node.js** (Website → Node Project → Node version manager, versi 20).
-3. **App Store → PHP 8.2 → Settings**:
-   - **Install extensions**: `fileinfo` (wajib untuk upload foto). `opcache` disarankan.
-   - **Disabled functions**: hapus `putenv`, `proc_open`, `proc_get_status`, `symlink` dari daftar. Composer dan scheduler Laravel membutuhkannya.
-4. **Composer**: `composer --version`. Kalau belum ada:
-   `curl -sS https://getcomposer.org/installer | /www/server/php/82/bin/php -- --install-dir=/usr/local/bin --filename=composer`
+1. **DNS**: buat A record `selfstudio` dan `api.selfstudio`, keduanya ke IP VPS.
+2. PHP 8.2 harus punya ekstensi `fileinfo`, `pdo_mysql`, `mbstring`, `dom`, `gd`, `zip`, `intl`. Semuanya sudah terpasang.
+3. **Node.js 20** untuk build frontend (`node -v`).
 
 ## 1. Ambil kode
 
-Repo-nya private. Buat **deploy key**:
+Pakai deploy key dengan alias `github-selfstudio` di `~/.ssh/config`:
 
 ```bash
-ssh-keygen -t ed25519 -C "vps-selfstudio" -f ~/.ssh/selfstudio -N ""
-cat ~/.ssh/selfstudio.pub   # tempel di GitHub → repo → Settings → Deploy keys (read-only)
-cat >> ~/.ssh/config <<'EOF'
-Host github-selfstudio
-  HostName github.com
-  IdentityFile ~/.ssh/selfstudio
-EOF
-
 cd /www/wwwroot
 git clone -b improvements git@github-selfstudio:studiopoonya/Poonya_Universe.git selfstudio
 ```
 
 ## 2. Database
 
-aaPanel → **Databases** → Add database: nama `selfstudio`, user `selfstudio`, password kuat. Simpan password-nya.
+aaPanel → **Databases**: database `selfstudio`, user `selfstudio`. Password-nya ada di ikon mata.
 
 ## 3. Backend (Laravel)
 
 ```bash
 cd /www/wwwroot/selfstudio/backend
-composer install --no-dev --optimize-autoloader
-cp .env.example .env
+COMPOSER_ALLOW_SUPERUSER=1 /www/server/php/82/bin/php $(which composer) install --no-dev --optimize-autoloader
+cp -n .env.example .env
 /www/server/php/82/bin/php artisan key:generate
 ```
 
-Edit `backend/.env` (lewat File Manager). Nilai rahasia jangan dikirim ke chat.
+Edit `backend/.env` lewat File Manager. Nilai rahasia jangan dikirim ke chat.
 
 ```env
 APP_NAME="Poonya Studio"
 APP_ENV=production
 APP_DEBUG=false
-APP_URL=https://selfstudio.studiopoonya.net
-FRONTEND_URL=https://selfstudio.studiopoonya.net
+APP_URL=https://api.selfstudio.studiopoonya.net        # domain API
+FRONTEND_URL=https://selfstudio.studiopoonya.net       # domain website (CORS + link di email)
 
 DB_DATABASE=selfstudio
 DB_USERNAME=selfstudio
-DB_PASSWORD=...            # dari langkah 2
+DB_PASSWORD=...
 
 QUEUE_CONNECTION=database
 
@@ -80,18 +67,17 @@ MIDTRANS_CLIENT_KEY=...
 MIDTRANS_IS_PRODUCTION=true
 
 ADMIN_EMAIL=studiopoonya@gmail.com
-ADMIN_PASSWORD=...         # password login admin
+ADMIN_PASSWORD=...
 ```
 
 Lalu:
 
 ```bash
-/www/server/php/82/bin/php artisan migrate --force
-/www/server/php/82/bin/php artisan db:seed --force      # admin + studio + jam operasional (sekali saja)
-/www/server/php/82/bin/php artisan storage:link
-/www/server/php/82/bin/php artisan config:cache
-/www/server/php/82/bin/php artisan route:cache
-/www/server/php/82/bin/php artisan view:cache
+P=/www/server/php/82/bin/php
+$P artisan migrate --force
+$P artisan db:seed --force      # admin + studio + jam operasional (sekali saja)
+$P artisan storage:link
+$P artisan config:cache && $P artisan route:cache && $P artisan view:cache
 chown -R www:www /www/wwwroot/selfstudio
 chmod -R 775 storage bootstrap/cache
 ```
@@ -100,54 +86,42 @@ chmod -R 775 storage bootstrap/cache
 
 ```bash
 cd /www/wwwroot/selfstudio/frontend
-echo "VITE_SITE_URL=https://selfstudio.studiopoonya.net" > .env.production
+cat > .env.production <<'EOF'
+VITE_API_URL=https://api.selfstudio.studiopoonya.net
+VITE_SITE_URL=https://selfstudio.studiopoonya.net
+EOF
 npm ci
 npm run build             # hasilnya ada di frontend/dist
 ```
 
-## 5. Website + Nginx
+## 5. Dua situs di aaPanel
 
-1. aaPanel → **Website → Add site**: domain `selfstudio.studiopoonya.net`, PHP **8.2**, tanpa database.
-   **Root directory**: `/www/wwwroot/selfstudio/frontend/dist`.
-2. Site → **Conf → Site directory**: matikan **Anti-XSS attack (open_basedir)**. Laravel ada di luar folder `dist`.
-3. Site → **Conf → SSL → Let's Encrypt**, lalu aktifkan **Force HTTPS**.
-4. Site → **Conf → Config file**. Di dalam blok `server { ... }`, cari baris `include enable-php-82.conf;` dan tambahkan blok berikut **tepat di atasnya**:
+### a. Website: `selfstudio.studiopoonya.net`
+
+1. Site → **Conf → Site directory**: ubah root ke `/www/wwwroot/selfstudio/frontend/dist`, lalu Save.
+2. **SSL → Let's Encrypt**, lalu aktifkan **Force HTTPS**.
+3. **Config file**: di dalam `server { ... }`, tambahkan blok ini tepat di atas baris `include enable-php-82.conf;`:
 
 ```nginx
-    # ── Poonya Studio: React SPA + Laravel API on one domain ──
+    # ── React SPA: every page falls back to index.html ──
     index index.html;
-
-    location ^~ /api {
-        root /www/wwwroot/selfstudio/backend/public;
-        try_files $uri /index.php?$query_string;
-    }
-
-    location = /index.php {
-        root /www/wwwroot/selfstudio/backend/public;
-        fastcgi_pass unix:/tmp/php-cgi-82.sock;
-        fastcgi_param SCRIPT_FILENAME $document_root/index.php;
-        include fastcgi_params;
-        fastcgi_read_timeout 60s;
-    }
-
-    location ^~ /storage/ {
-        alias /www/wwwroot/selfstudio/backend/storage/app/public/;
-        expires 30d;
-    }
-
     location /assets/ {
         expires 1y;
         add_header Cache-Control "public, immutable";
     }
-
     location / {
         try_files $uri $uri/ /index.html;
     }
-
-    client_max_body_size 10m;
 ```
 
-Simpan. aaPanel akan mengecek config-nya. Kalau ada error, biasanya karena di file itu sudah ada blok `location /` lain. Hapus blok yang lama.
+### b. API: `api.selfstudio.studiopoonya.net`
+
+1. **Add site**: domain `api.selfstudio.studiopoonya.net`, PHP **8.2**, tanpa database.
+   Root: `/www/wwwroot/selfstudio/backend/public`.
+2. Site → **Conf → Site directory**: matikan **Anti-XSS attack (open_basedir)**. Laravel perlu membaca folder di atas `public/`.
+3. Site → **Conf → URL rewrite**: pilih template **laravel5**, lalu Save. Isinya: `location / { try_files $uri $uri/ /index.php?$query_string; }`
+4. **SSL → Let's Encrypt**, lalu aktifkan **Force HTTPS**.
+5. **Config file**: tambahkan `client_max_body_size 10m;` di dalam `server { ... }` (untuk upload foto studio).
 
 ## 6. Queue worker (wajib, untuk email)
 
@@ -168,12 +142,13 @@ aaPanel → **Cron → Add task**:
 
 ## 8. Cek
 
-1. Buka https://selfstudio.studiopoonya.net. Halaman booking harus muncul.
-2. https://selfstudio.studiopoonya.net/admin/login. Login dengan `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
-3. **Admin → Email**: status harus "Aktif dari .env server", lalu klik **Kirim Tes**.
-4. **Admin → Settings → Tes Pembayaran**: buat QR Rp100, scan, dan status harus berubah jadi berhasil.
+1. https://api.selfstudio.studiopoonya.net/api/settings harus menampilkan JSON (`{"payment_gateway":...}`).
+2. https://selfstudio.studiopoonya.net: halaman booking harus muncul dan studio terlihat.
+3. https://selfstudio.studiopoonya.net/admin/login: login dengan `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
+4. **Admin → Email**: status harus "Aktif dari .env server", lalu klik **Kirim Tes**.
+5. **Admin → Settings → Tes Pembayaran**: buat QR Rp100, scan, dan status harus berubah jadi berhasil.
 
-**Webhook Midtrans:** pengaturan **Notification URL** di dashboard Midtrans **tidak perlu diubah**, karena akun itu dipakai juga oleh sistem lain. Setiap transaksi dari aplikasi ini otomatis meminta Midtrans mengirim notifikasi juga ke `https://selfstudio.studiopoonya.net/api/webhooks/payment/midtrans` (header `X-Append-Notification`).
+**Webhook Midtrans:** pengaturan **Notification URL** di dashboard Midtrans **tidak perlu diubah**, karena akun itu dipakai juga oleh sistem lain. Setiap transaksi dari aplikasi ini otomatis meminta Midtrans mengirim notifikasi juga ke `https://api.selfstudio.studiopoonya.net/api/webhooks/payment/midtrans`. URL itu diambil dari `APP_URL`.
 
 ---
 
@@ -182,17 +157,20 @@ aaPanel → **Cron → Add task**:
 ```bash
 cd /www/wwwroot/selfstudio && git pull
 cd backend
-composer install --no-dev --optimize-autoloader
-/www/server/php/82/bin/php artisan migrate --force
-/www/server/php/82/bin/php artisan config:cache && /www/server/php/82/bin/php artisan route:cache && /www/server/php/82/bin/php artisan view:cache
-/www/server/php/82/bin/php artisan queue:restart
+P=/www/server/php/82/bin/php
+COMPOSER_ALLOW_SUPERUSER=1 $P $(which composer) install --no-dev --optimize-autoloader
+$P artisan migrate --force
+$P artisan config:cache && $P artisan route:cache && $P artisan view:cache
+$P artisan queue:restart
 cd ../frontend && npm ci && npm run build
 chown -R www:www /www/wwwroot/selfstudio
 ```
 
 ## Kalau ada masalah
 
-- **Halaman putih atau 404 saat refresh**: blok `location /` dengan `try_files ... /index.html` belum masuk.
-- **API 500**: lihat `backend/storage/logs/laravel.log`. Biasanya karena izin folder (`chown`/`chmod` di langkah 3) atau `.env` yang salah. Setelah mengubah `.env`, selalu jalankan `config:cache`.
-- **Email tidak terkirim**: worker di Supervisor belum running, atau App Password salah. Cek `storage/logs/laravel.log`.
-- **Foto studio tidak muncul**: blok `/storage/` belum ada, atau `fileinfo` belum terpasang.
+- **Website putih atau 404 saat refresh halaman**: blok `location /` dengan `try_files ... /index.html` belum masuk di situs website.
+- **Website muncul tapi data tidak keluar (CORS error di console)**: `FRONTEND_URL` di `backend/.env` harus persis `https://selfstudio.studiopoonya.net`, tanpa `/` di akhir. Setelah itu jalankan `config:cache`. Cek juga `VITE_API_URL` di `frontend/.env.production`, lalu build ulang.
+- **API 404 untuk semua alamat**: URL rewrite **laravel5** belum dipasang di situs API.
+- **API 500**: lihat `backend/storage/logs/laravel.log`. Biasanya karena izin folder (`chown`/`chmod`) atau `.env` yang salah. Setelah mengubah `.env`, selalu jalankan `config:cache`.
+- **Email tidak terkirim**: worker di Supervisor belum running, atau App Password salah.
+- **Foto studio tidak muncul**: `storage:link` belum dijalankan, atau `APP_URL` salah. Foto disajikan dari domain API.
