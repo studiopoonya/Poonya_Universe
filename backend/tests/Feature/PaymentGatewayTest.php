@@ -94,4 +94,21 @@ class PaymentGatewayTest extends TestCase
             ->assertJson(['xendit_key_status' => 'test', 'xendit_callback_token' => true])
             ->assertJsonPath('xendit_webhook_url', fn ($u) => str_ends_with($u, '/api/webhooks/payment/xendit'));
     }
+
+    public function test_midtrans_is_asked_to_also_notify_this_app_when_public(): void
+    {
+        config(['app.url' => 'https://selfstudio.example.com']);
+        $this->book($this->slot($this->studio()));
+
+        \Illuminate\Support\Facades\Http::assertSent(fn ($r) => str_ends_with($r->url(), '/v2/charge')
+            && $r->header('X-Append-Notification') === ['https://selfstudio.example.com/api/webhooks/payment/midtrans']);
+    }
+
+    public function test_no_notification_header_from_localhost(): void
+    {
+        config(['app.url' => 'http://localhost:8000']);
+        $this->book($this->slot($this->studio()));
+
+        \Illuminate\Support\Facades\Http::assertSent(fn ($r) => str_ends_with($r->url(), '/v2/charge') && ! $r->hasHeader('X-Append-Notification'));
+    }
 }

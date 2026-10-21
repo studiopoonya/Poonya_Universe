@@ -119,6 +119,7 @@ class PaymentGatewayService
     {
         $response = Http::withBasicAuth(config('services.midtrans.server_key'), '')
             ->timeout(15)
+            ->withHeaders(self::midtransNotifyHeaders())
             ->post(self::midtransApiBase() . '/v2/charge', [
                 'payment_type'        => 'qris',
                 'transaction_details' => ['order_id' => $orderId, 'gross_amount' => $amount],
@@ -149,6 +150,7 @@ class PaymentGatewayService
     {
         $response = Http::withBasicAuth(config('services.midtrans.server_key'), '')
             ->timeout(15)
+            ->withHeaders(self::midtransNotifyHeaders())
             ->post(self::midtransIsProduction()
                 ? 'https://app.midtrans.com/snap/v1/transactions'
                 : 'https://app.sandbox.midtrans.com/snap/v1/transactions', [
@@ -161,6 +163,18 @@ class PaymentGatewayService
         throw_unless($response->successful(), new \RuntimeException('Midtrans error: ' . $response->body()));
 
         return $response->json('token');
+    }
+
+    /**
+     * Have Midtrans also notify this app, on top of the URL in the dashboard. The Midtrans
+     * account is shared with other systems, so the dashboard setting is left alone.
+     * Midtrans only accepts public https URLs, so nothing is sent from localhost.
+     */
+    private static function midtransNotifyHeaders(): array
+    {
+        $url = rtrim((string) config('app.url'), '/') . '/api/webhooks/payment/midtrans';
+
+        return str_starts_with($url, 'https://') ? ['X-Append-Notification' => $url] : [];
     }
 
     /**
